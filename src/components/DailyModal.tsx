@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { DailyRecord, MonthlyStat } from '../data/types';
 import { ProfitModelType } from './Header';
-import { formatYenExact, formatCoinsExact, formatNumber } from '../utils/formatters';
+import { formatYen, formatYenExact, formatCoinsExact, formatNumber } from '../utils/formatters';
 import { analyzeSpecialDayPatterns } from '../utils/specialDayPatterns';
 import { X, Calendar, Flame, Sparkles, Filter, CheckCircle2, Zap, Target } from 'lucide-react';
 
@@ -11,7 +11,7 @@ interface DailyModalProps {
   dailyRecords: DailyRecord[];
   perspective: 'hall' | 'player';
   unit: 'yen' | 'coins' | 'avgDiff';
-  profitModel: ProfitModelType;
+  profitModel?: any;
   onClose: () => void;
 }
 
@@ -75,20 +75,7 @@ export const DailyModal: React.FC<DailyModalProps> = ({
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300 mt-1.5">
               <span>
-                ① 差枚モデル:{' '}
-                <span
-                  className={`font-bold ${
-                    (perspective === 'hall' ? monthSummary.hallYenProfit : monthSummary.playerYenProfit) >= 0
-                      ? 'text-emerald-400'
-                      : 'text-rose-400'
-                  }`}
-                >
-                  {formatYenExact(perspective === 'hall' ? monthSummary.hallYenProfit : monthSummary.playerYenProfit)}
-                </span>
-              </span>
-              <span>•</span>
-              <span>
-                ② G数モデル:{' '}
+                {perspective === 'hall' ? 'ホール粗利(G数連動): ' : '収支(G数連動): '}
                 <span
                   className={`font-extrabold ${
                     (perspective === 'hall' ? monthSummary.gModelHallProfit : monthSummary.gModelPlayerProfit) >= 0
@@ -98,12 +85,8 @@ export const DailyModal: React.FC<DailyModalProps> = ({
                 >
                   {formatYenExact(perspective === 'hall' ? monthSummary.gModelHallProfit : monthSummary.gModelPlayerProfit)}
                 </span>
-              </span>
-              <span>•</span>
-              <span>
-                G数ギャップ寄与:{' '}
-                <span className="font-bold text-amber-300">
-                  +{formatYenExact(monthSummary.exchangeGapProfit)}
+                <span className="text-slate-400 text-[11px] ml-1.5 font-normal">
+                  (1台: {formatYen(Math.round((perspective === 'hall' ? monthSummary.gModelHallProfit : monthSummary.gModelPlayerProfit) / (monthSummary.avgMachines || 587)))}/月, {formatYen(Math.round((perspective === 'hall' ? monthSummary.gModelHallProfit : monthSummary.gModelPlayerProfit) / ((monthSummary.avgMachines || 587) * (monthSummary.daysCount || 1))))}/日)
                 </span>
               </span>
               <span>•</span>
@@ -238,9 +221,9 @@ export const DailyModal: React.FC<DailyModalProps> = ({
                 <th className="py-2.5 px-3">区分</th>
                 <th className="py-2.5 px-3 text-right">設置台数</th>
                 <th className="py-2.5 px-3 text-right">客平均差枚</th>
-                <th className="py-2.5 px-3 text-right text-blue-700">① 差枚モデル</th>
-                <th className="py-2.5 px-3 text-right text-indigo-700">② G数モデル</th>
-                <th className="py-2.5 px-3 text-right text-amber-700">ギャップ利益</th>
+                <th className="py-2.5 px-3 text-right text-indigo-700">
+                  {perspective === 'hall' ? 'ホール粗利(G数連動)' : '収支(G数連動)'}
+                </th>
                 <th className="py-2.5 px-3 text-right">平均G数</th>
                 <th className="py-2.5 px-3 text-right">出玉率</th>
                 <th className="py-2.5 px-3 text-right">勝率 (勝/総台数)</th>
@@ -294,25 +277,16 @@ export const DailyModal: React.FC<DailyModalProps> = ({
                     >
                       {d.avgDiffCoins > 0 ? `+${d.avgDiffCoins}` : d.avgDiffCoins}枚
                     </td>
-                    {/* Model A */}
-                    <td
-                      className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
-                        diffVal >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                      }`}
-                    >
-                      {formatYenExact(diffVal)}
-                    </td>
-                    {/* Model B */}
+                    {/* G-Model */}
                     <td
                       className={`py-2.5 px-3 text-right font-extrabold whitespace-nowrap ${
                         gVal >= 0 ? 'text-indigo-600' : 'text-rose-600'
                       }`}
                     >
-                      {formatYenExact(gVal)}
-                    </td>
-                    {/* Gap profit */}
-                    <td className="py-2.5 px-3 text-right font-semibold text-amber-600 whitespace-nowrap">
-                      +{formatYenExact(d.exchangeGapProfit)}
+                      <div>{formatYenExact(gVal)}</div>
+                      <div className="text-[10px] text-slate-400 font-normal">
+                        {formatYen(Math.round(gVal / (d.totalMachines || 587)))}/台
+                      </div>
                     </td>
                     <td className="py-2.5 px-3 text-right text-slate-600 whitespace-nowrap">
                       {formatNumber(d.avgGames)}G
@@ -352,7 +326,7 @@ export const DailyModal: React.FC<DailyModalProps> = ({
 
         {/* Modal Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>※G数モデル: IN枚数(3枚/G) $\times$ 現金投資比率(35%) $\times$ 換金ギャップ(2.51円) - 差枚収支</span>
+          <span>※G数モデル: IN枚数・稼働ゲーム数と差枚還元を同時に反映したホール実務粗利</span>
           <button
             type="button"
             onClick={onClose}

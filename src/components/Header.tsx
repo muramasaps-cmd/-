@@ -7,7 +7,7 @@ import {
   ArrowLeftRight,
   TrendingUp,
   Calculator,
-  SplitSquareVertical,
+  Zap,
   Layers,
   Plus,
   Target,
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { SpecialDayRuleModal } from './SpecialDayRuleModal';
 
-export type ProfitModelType = 'diff' | 'gCount' | 'comparison';
+export type ProfitModelType = 'gCount';
 
 interface HeaderProps {
   storeInfo: StoreInfo;
@@ -23,8 +23,8 @@ interface HeaderProps {
   setPerspective: (p: 'hall' | 'player') => void;
   unit: 'yen' | 'coins' | 'avgDiff';
   setUnit: (u: 'yen' | 'coins' | 'avgDiff') => void;
-  profitModel: ProfitModelType;
-  setProfitModel: (m: ProfitModelType) => void;
+  profitModel?: ProfitModelType;
+  setProfitModel?: (m: ProfitModelType) => void;
   selectedYear: string;
   setSelectedYear: (y: string) => void;
   years: string[];
@@ -124,32 +124,42 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Quick Mode Switchers */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {/* Perspective Switcher */}
-            <div className="bg-slate-800/90 p-1 rounded-xl border border-slate-700/80 flex">
+            <div className="bg-slate-800/90 p-1 rounded-xl border border-slate-700/80 flex shadow-inner">
               <button
                 type="button"
                 id="btn-perspective-hall"
                 onClick={() => setPerspective('hall')}
-                className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                   perspective === 'hall'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Building2 className="w-4 h-4" />
-                ホール目線 (粗利)
+                <div className="flex items-center gap-1">
+                  <Building2 className="w-4 h-4" />
+                  <span>ホール目線 (粗利)</span>
+                </div>
+                <span className={`text-[9px] px-1 rounded ${perspective === 'hall' ? 'bg-amber-600/30 text-slate-950 font-bold' : 'text-slate-500'}`}>
+                  +は店利益
+                </span>
               </button>
               <button
                 type="button"
                 id="btn-perspective-player"
                 onClick={() => setPerspective('player')}
-                className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                   perspective === 'player'
-                    ? 'bg-emerald-500 text-white shadow-sm'
+                    ? 'bg-emerald-500 text-white shadow-md font-bold'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <TrendingUp className="w-4 h-4" />
-                スロッター目線 (収支)
+                <div className="flex items-center gap-1">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>スロッター目線 (収支)</span>
+                </div>
+                <span className={`text-[9px] px-1 rounded ${perspective === 'player' ? 'bg-emerald-700/50 text-white font-bold' : 'text-slate-500'}`}>
+                  +は客勝ち
+                </span>
               </button>
             </div>
 
@@ -198,48 +208,15 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Calculation Model Selector & Year Tabs */}
         <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          {/* Profit Model Buttons */}
+          {/* Profit Model Indicator */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-amber-400 font-semibold flex items-center gap-1">
               <Calculator className="w-3.5 h-3.5" />
               利益算出方式:
             </span>
-
-            <div className="bg-slate-800/90 p-1 rounded-lg border border-slate-700 flex">
-              <button
-                type="button"
-                onClick={() => setProfitModel('diff')}
-                className={`px-3 py-1 text-xs rounded font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                  profitModel === 'diff'
-                    ? 'bg-slate-700 text-white font-bold shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                ① 差枚数モデル (差枚換金)
-              </button>
-              <button
-                type="button"
-                onClick={() => setProfitModel('gCount')}
-                className={`px-3 py-1 text-xs rounded font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                  profitModel === 'gCount'
-                    ? 'bg-indigo-600 text-white font-bold shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                ② G数(IN枚数)モデル
-              </button>
-              <button
-                type="button"
-                onClick={() => setProfitModel('comparison')}
-                className={`px-3 py-1 text-xs rounded font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
-                  profitModel === 'comparison'
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
-                    : 'text-amber-400/90 hover:text-amber-300'
-                }`}
-              >
-                <SplitSquareVertical className="w-3.5 h-3.5" />
-                📊 2大モデル見比べ (比較)
-              </button>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-900/80 border border-indigo-500/50 text-indigo-100 text-xs font-bold rounded-lg shadow-xs">
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              G数(IN枚数)連動モデル (ホール実務粗利)
             </div>
           </div>
 

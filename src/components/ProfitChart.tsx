@@ -24,7 +24,7 @@ interface ProfitChartProps {
   monthlyStats: MonthlyStat[];
   perspective: 'hall' | 'player';
   unit: 'yen' | 'coins' | 'avgDiff';
-  profitModel: ProfitModelType;
+  profitModel?: any;
   onSelectMonth?: (yearMonth: string) => void;
 }
 
@@ -88,8 +88,8 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
       }
     }
 
-    const currentVal = profitModel === 'gCount' ? gModelVal : diffVal;
-    const currentCumVal = profitModel === 'gCount' ? gModelCumVal : diffCumVal;
+    const currentVal = gModelVal;
+    const currentCumVal = gModelCumVal;
 
     return {
       ...m,
@@ -108,51 +108,42 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data: (typeof chartData)[0] = payload[0].payload;
-      const diffYen = perspective === 'hall' ? data.hallYenProfit : data.playerYenProfit;
       const gYen = perspective === 'hall' ? data.gModelHallProfit : data.gModelPlayerProfit;
-      const gapYen = data.exchangeGapProfit;
+      const perMachineMonth = data.avgMachines > 0 ? Math.round(gYen / data.avgMachines) : 0;
+      const perMachineDaily =
+        data.avgMachines > 0 && data.daysCount > 0 ? Math.round(gYen / (data.avgMachines * data.daysCount)) : 0;
 
       return (
         <div className="bg-slate-900/95 text-white p-3.5 rounded-lg shadow-xl border border-slate-700 text-xs max-w-sm backdrop-blur-xs">
           <div className="font-bold text-sm text-amber-400 border-b border-slate-700/80 pb-1.5 mb-2 flex items-center justify-between">
             <span>{data.label}</span>
-            <span className="text-[11px] font-normal text-slate-400">{data.daysCount}日間営業</span>
+            <span className="text-[11px] font-normal text-slate-400">{data.daysCount}日間営業 (平均{data.avgMachines}台)</span>
           </div>
 
           <div className="space-y-1.5">
-            {/* Model A vs Model B */}
-            <div className="bg-slate-800/80 p-2 rounded border border-slate-700 space-y-1">
+            {/* G-count Model Details */}
+            <div className="bg-slate-800/80 p-2.5 rounded-lg border border-indigo-900/50 space-y-1.5">
               <div className="flex justify-between items-center">
-                <span className="text-slate-300 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-blue-400" />
-                  ① 差枚数モデル:
-                </span>
-                <span
-                  className={`font-extrabold ${
-                    diffYen >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {formatYen(diffYen)}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-indigo-200 font-medium flex items-center gap-1">
+                <span className="text-indigo-200 font-bold flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  ② G数(IN枚数)モデル:
+                  {perspective === 'hall' ? 'G数連動ホール粗利:' : 'G数連動ユーザー収支:'}
                 </span>
                 <span
-                  className={`font-extrabold ${
+                  className={`font-extrabold text-sm ${
                     gYen >= 0 ? 'text-amber-400' : 'text-rose-400'
                   }`}
                 >
                   {formatYen(gYen)}
                 </span>
               </div>
-
-              <div className="flex justify-between items-center border-t border-slate-700/60 pt-1 text-[11px]">
-                <span className="text-slate-400">G数換金ギャップ寄与:</span>
-                <span className="text-amber-300 font-bold">+{formatYen(gapYen)}</span>
+              <div className="flex justify-between items-center text-[11px] pt-1 border-t border-slate-700/60">
+                <span className="text-slate-400">1台あたり収支:</span>
+                <span className="font-bold text-amber-300">
+                  {formatYen(perMachineDaily)}/台・日
+                  <span className="text-[10px] text-slate-300 font-normal ml-1">
+                    (月 {formatYen(perMachineMonth)}/台)
+                  </span>
+                </span>
               </div>
             </div>
 
@@ -194,21 +185,13 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
         <div>
           <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-amber-500" />
-            <span>
-              {profitModel === 'comparison'
-                ? '2大算出モデルの月別利益 見比べ推移'
-                : profitModel === 'gCount'
-                ? 'G数(IN枚数)連動モデル 月別利益推移'
-                : '差枚数モデル 月別利益推移'}
-            </span>
+            <span>G数(IN枚数)連動モデル 月別利益推移</span>
             <span className="text-xs font-normal text-slate-500">
               (単位: {unitLabel})
             </span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {profitModel === 'comparison'
-              ? '「青：差枚数のみの換算」と「橙：G数換金ギャップを算入した実務モデル」の差異を月毎に比較できます'
-              : 'バーをクリックすると各月の日別出玉・優秀機種詳細がポップアップします'}
+            バーをクリックすると各月の日別出玉・優秀機種詳細がポップアップします
           </p>
         </div>
 
@@ -282,71 +265,29 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
               <Tooltip content={<CustomTooltip />} />
               <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1.5} />
 
-              {profitModel === 'comparison' ? (
-                <>
-                  <Legend
-                    verticalAlign="top"
-                    height={36}
-                    formatter={(value) => (
-                      <span className="text-xs font-semibold text-slate-700">{value}</span>
-                    )}
-                  />
-                  <Bar
-                    dataKey="diffVal"
-                    name="① 差枚数モデル粗利"
-                    fill="#3b82f6"
-                    radius={[3, 3, 0, 0]}
-                    cursor="pointer"
-                  />
-                  <Bar
-                    dataKey="gModelVal"
-                    name="② G数(IN枚数)連動粗利"
-                    fill="#f59e0b"
-                    radius={[3, 3, 0, 0]}
-                    cursor="pointer"
-                  />
-                </>
-              ) : (
-                <Bar
-                  dataKey="currentVal"
-                  name={
-                    profitModel === 'gCount'
-                      ? perspective === 'hall'
-                        ? 'G数連動ホール粗利'
-                        : 'G数連動ユーザー収支'
-                      : perspective === 'hall'
-                      ? 'ホール差枚粗利'
-                      : 'ユーザー差枚収支'
+              <Bar
+                dataKey="currentVal"
+                name={perspective === 'hall' ? 'G数連動ホール粗利' : 'G数連動ユーザー収支'}
+                radius={[3, 3, 0, 0]}
+                cursor="pointer"
+              >
+                {chartData.map((entry, index) => {
+                  const isPositive = entry.currentVal >= 0;
+                  let color = '';
+                  if (perspective === 'hall') {
+                    color = isPositive ? '#6366f1' : '#f43f5e';
+                  } else {
+                    color = isPositive ? '#3b82f6' : '#f43f5e';
                   }
-                  radius={[3, 3, 0, 0]}
-                  cursor="pointer"
-                >
-                  {chartData.map((entry, index) => {
-                    const isPositive = entry.currentVal >= 0;
-                    let color = '';
-                    if (perspective === 'hall') {
-                      color =
-                        profitModel === 'gCount'
-                          ? isPositive
-                            ? '#6366f1' // Indigo for G-count model
-                            : '#f43f5e'
-                          : isPositive
-                          ? '#10b981' // Emerald for diff model
-                          : '#f43f5e';
-                    } else {
-                      color = isPositive ? '#3b82f6' : '#f43f5e';
-                    }
-                    return <Cell key={`cell-${index}`} fill={color} />;
-                  })}
-                </Bar>
-              )}
+                  return <Cell key={`cell-${index}`} fill={color} />;
+                })}
+              </Bar>
             </BarChart>
           ) : chartType === 'cumulative' ? (
             <AreaChartComponent
               data={chartData}
               perspective={perspective}
               unitLabel={unitLabel}
-              profitModel={profitModel}
               CustomTooltip={CustomTooltip}
               onSelectMonth={onSelectMonth}
             />
@@ -368,10 +309,10 @@ const AreaChartComponent: React.FC<{
   data: any[];
   perspective: 'hall' | 'player';
   unitLabel: string;
-  profitModel: ProfitModelType;
+  profitModel?: any;
   CustomTooltip: any;
   onSelectMonth?: (ym: string) => void;
-}> = ({ data, perspective, unitLabel, profitModel, CustomTooltip, onSelectMonth }) => {
+}> = ({ data, perspective, unitLabel, CustomTooltip, onSelectMonth }) => {
   return (
     <ComposedChart
       data={data}
@@ -395,43 +336,17 @@ const AreaChartComponent: React.FC<{
       <Tooltip content={<CustomTooltip />} />
       <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1.5} />
 
-      {profitModel === 'comparison' ? (
-        <>
-          <Legend verticalAlign="top" height={36} />
-          <Line
-            type="monotone"
-            dataKey="diffCumVal"
-            name={`① 差枚数モデル累計 (${unitLabel})`}
-            stroke="#3b82f6"
-            strokeWidth={2.5}
-            dot={{ r: 2 }}
-          />
-          <Line
-            type="monotone"
-            dataKey="gModelCumVal"
-            name={`② G数モデル累計 (${unitLabel})`}
-            stroke="#f59e0b"
-            strokeWidth={3}
-            dot={{ r: 3 }}
-          />
-        </>
-      ) : (
-        <Area
-          type="monotone"
-          dataKey="currentCumVal"
-          stroke={profitModel === 'gCount' ? '#6366f1' : '#10b981'}
-          fill={profitModel === 'gCount' ? '#6366f1' : '#10b981'}
-          fillOpacity={0.15}
-          strokeWidth={2.5}
-          dot={{ r: 3 }}
-          activeDot={{ r: 6 }}
-          name={
-            profitModel === 'gCount'
-              ? `G数連動累計利益 (${unitLabel})`
-              : `差枚換算累計利益 (${unitLabel})`
-          }
-        />
-      )}
+      <Area
+        type="monotone"
+        dataKey="currentCumVal"
+        stroke="#6366f1"
+        fill="#6366f1"
+        fillOpacity={0.15}
+        strokeWidth={2.5}
+        dot={{ r: 3 }}
+        activeDot={{ r: 6 }}
+        name={`G数連動累計利益 (${unitLabel})`}
+      />
     </ComposedChart>
   );
 };

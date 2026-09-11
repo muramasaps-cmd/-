@@ -4,7 +4,8 @@ import { Header, ProfitModelType } from './components/Header';
 import { KpiCards } from './components/KpiCards';
 import { ModelComparisonBanner } from './components/ModelComparisonBanner';
 import { ProfitChart } from './components/ProfitChart';
-import { EventComparison } from './components/EventComparison';
+import { DayOfWeekAnalysis } from './components/DayOfWeekAnalysis';
+import { TailNumberAnalysis } from './components/TailNumberAnalysis';
 import { SpecialDayPatterns } from './components/SpecialDayPatterns';
 import { MonthlyTable } from './components/MonthlyTable';
 import { DailyModal } from './components/DailyModal';
@@ -58,7 +59,7 @@ export default function App() {
 
   const [perspective, setPerspective] = useState<'hall' | 'player'>('hall');
   const [unit, setUnit] = useState<'yen' | 'coins' | 'avgDiff'>('yen');
-  const [profitModel, setProfitModel] = useState<ProfitModelType>('comparison');
+  const [profitModel, setProfitModel] = useState<ProfitModelType>('gCount');
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonthModal, setSelectedMonthModal] = useState<string | null>(null);
 
@@ -136,10 +137,6 @@ export default function App() {
       0
     );
   }, [filteredMonthlyStats, perspective]);
-
-  const totalGapProfit = useMemo(() => {
-    return filteredMonthlyStats.reduce((acc, m) => acc + m.exchangeGapProfit, 0);
-  }, [filteredMonthlyStats]);
 
   const totalRevenue = useMemo(() => {
     return filteredMonthlyStats.reduce((acc, m) => acc + m.estimatedRevenue, 0);
@@ -623,6 +620,47 @@ export default function App() {
           </div>
         )}
 
+        {/* Perspective Status Indicator Banner */}
+        <div
+          className={`px-4 py-2.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs transition-all shadow-2xs ${
+            perspective === 'hall'
+              ? 'bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-indigo-500/40 text-white'
+              : 'bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 border-emerald-500/50 text-white'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-2 py-0.5 rounded text-[11px] font-black ${
+                perspective === 'hall' ? 'bg-amber-400 text-slate-950' : 'bg-emerald-400 text-slate-950'
+              }`}
+            >
+              {perspective === 'hall' ? 'ホール経営目線' : 'スロッター収支目線'}
+            </span>
+            <span className="font-medium text-slate-200">
+              {perspective === 'hall' ? (
+                <span>
+                  <strong>「+」黒字</strong> = 店舗の粗利獲得 (回収) ／ <strong>「-」赤字</strong> = 出玉還元 (客勝ち)
+                </span>
+              ) : (
+                <span>
+                  <strong>「+」青/緑</strong> = スロッターの勝ち (出玉獲得) ／ <strong>「-」赤字</strong> = スロッターの負け
+                </span>
+              )}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto text-[11px]">
+            <span className="text-slate-400 hidden md:inline">ワンクリック切替:</span>
+            <button
+              type="button"
+              onClick={() => setPerspective(perspective === 'hall' ? 'player' : 'hall')}
+              className="underline hover:text-amber-300 font-bold cursor-pointer"
+            >
+              {perspective === 'hall' ? 'スロッター目線に切り替える →' : 'ホール目線に切り替える →'}
+            </button>
+          </div>
+        </div>
+
         {/* Model Comparison Banner */}
         <ModelComparisonBanner
           profitModel={profitModel}
@@ -630,7 +668,6 @@ export default function App() {
           perspective={perspective}
           totalDiffProfit={totalDiffProfit}
           totalGModelProfit={totalGModelProfit}
-          totalGapProfit={totalGapProfit}
           totalRevenue={totalRevenue}
           avgPayoutRate={avgPayoutRate}
           cashRatio={cashRatio}
@@ -654,12 +691,22 @@ export default function App() {
           onSelectMonth={(ym) => setSelectedMonthModal(ym)}
         />
 
-        {/* Event Days vs Normal Days & Day of Week Analysis */}
-        <EventComparison
+        {/* 〇のつく日別の利益・出玉傾向分析 */}
+        <TailNumberAnalysis
           dailyRecords={filteredDailyRecords}
           perspective={perspective}
           unit={unit}
           oldEventDays={currentStore.oldEventDays}
+          specialDayRules={currentStore.specialDayRules}
+        />
+
+        {/* 曜日別 利益・出玉傾向分析 */}
+        <DayOfWeekAnalysis
+          dailyRecords={filteredDailyRecords}
+          perspective={perspective}
+          unit={unit}
+          oldEventDays={currentStore.oldEventDays}
+          specialDayRules={currentStore.specialDayRules}
         />
 
         {/* Special Day Patterns (出す・回収するサイクル分析) */}
@@ -687,15 +734,12 @@ export default function App() {
         {/* Footnote / Explanation */}
         <div className="p-4 bg-white rounded-xl border border-slate-200/80 text-xs text-slate-500 space-y-1.5">
           <div className="font-bold text-slate-700 flex items-center gap-1.5">
-            <HelpCircle className="w-4 h-4 text-amber-500" />
-            2大利益算出モデルの計算式と構造の違いについて
+            <HelpCircle className="w-4 h-4 text-indigo-500" />
+            G数(IN枚数)連動 利益算出方式について
           </div>
           <ul className="list-disc list-inside space-y-1 text-slate-600 pl-1">
             <li>
-              <strong>① 差枚数モデル (シンプル出玉換金):</strong> スロットの差枚数（客側勝ち=+差枚、客側負け=-差枚）に対し、店の黒字日（-差枚）は貸出基準（1枚約{((1000/rateLend)).toFixed(2)}円）、店の赤字日（+差枚）は交換基準（1枚約{((1000/rateExchange)).toFixed(2)}円）で換算。G数に関わらず「差枚が0なら利益0」とする計算です。
-            </li>
-            <li>
-              <strong>② G数(IN枚数)モデル (実務・ホールコンモデル):</strong> IN枚数（平均G数 × 3枚 × 台数）から現金投資売上を推計し、換金ギャップ（{rateLend}枚貸 / {rateExchange}枚交換＝1枚あたり約{((1000/rateLend) - (1000/rateExchange)).toFixed(2)}円の手数料）を算入した実務利益です。高稼働な日ほど多額の手数料利益が確定するため、出玉を還元（差枚赤字）しても店舗経営が成立する理由がこのモデルで説明できます。
+              <strong>G数(IN枚数)連動モデル (実務ホールコン方式):</strong> IN枚数（平均G数 × 3枚 × 台数）から現金投資売上を推計し、貸出・交換レートによる換金ギャップ（{rateLend}枚貸 / {rateExchange}枚交換＝1枚あたり約{((1000/rateLend) - (1000/rateExchange)).toFixed(2)}円の手数料）を算入した実務粗利です。高稼働な日ほど確定する手数料収益と差枚還元を同時に把握できます。
             </li>
             <li>
               <strong>店舗特日ルール ({currentStore.name}):</strong> {currentStore.oldEventDays || '未設定'}

@@ -1,6 +1,5 @@
 import React from 'react';
 import { MonthlyStat } from '../data/types';
-import { ProfitModelType } from './Header';
 import { formatYen, formatCoins, formatNumber } from '../utils/formatters';
 import { TrendingUp, TrendingDown, DollarSign, CalendarCheck, Zap, Award, Calculator, Percent } from 'lucide-react';
 
@@ -8,21 +7,18 @@ interface KpiCardsProps {
   monthlyStats: MonthlyStat[];
   perspective: 'hall' | 'player';
   unit: 'yen' | 'coins' | 'avgDiff';
-  profitModel: ProfitModelType;
+  profitModel?: any;
 }
 
 export const KpiCards: React.FC<KpiCardsProps> = ({
   monthlyStats,
   perspective,
   unit,
-  profitModel,
 }) => {
   if (monthlyStats.length === 0) return null;
 
   // Calculate cumulative sums
   const totalDays = monthlyStats.reduce((acc, m) => acc + m.daysCount, 0);
-  const totalHallDiffYen = monthlyStats.reduce((acc, m) => acc + m.hallYenProfit, 0);
-  const totalPlayerDiffYen = monthlyStats.reduce((acc, m) => acc + m.playerYenProfit, 0);
   const totalHallCoins = monthlyStats.reduce((acc, m) => acc + m.hallCoinProfit, 0);
   const totalPlayerCoins = monthlyStats.reduce((acc, m) => acc + m.playerCoinProfit, 0);
 
@@ -41,21 +37,15 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
 
   const monthsCount = monthlyStats.length;
 
+  const avgTotalMachines = Math.round(
+    monthlyStats.reduce((acc, m) => acc + (m.avgMachines || 587) * m.daysCount, 0) / (totalDays || 1)
+  );
+
   const getEffectiveYen = (m: MonthlyStat) => {
-    if (profitModel === 'gCount') {
-      return perspective === 'hall' ? m.gModelHallProfit : m.gModelPlayerProfit;
-    }
-    return perspective === 'hall' ? m.hallYenProfit : m.playerYenProfit;
+    return perspective === 'hall' ? m.gModelHallProfit : m.gModelPlayerProfit;
   };
 
-  const totalPrimaryYen =
-    profitModel === 'gCount'
-      ? perspective === 'hall'
-        ? totalGModelHallYen
-        : totalGModelPlayerYen
-      : perspective === 'hall'
-      ? totalHallDiffYen
-      : totalPlayerDiffYen;
+  const totalPrimaryYen = perspective === 'hall' ? totalGModelHallYen : totalGModelPlayerYen;
 
   const totalPrimary =
     unit === 'yen'
@@ -65,12 +55,17 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
         ? totalHallCoins
         : totalPlayerCoins
       : Math.round(
-          (perspective === 'hall' ? totalHallCoins : totalPlayerCoins) / totalDays / 587
+          (perspective === 'hall' ? totalHallCoins : totalPlayerCoins) / (totalDays || 1) / (avgTotalMachines || 587)
         );
 
   const avgMonthlyPrimary = Math.round(totalPrimary / (monthsCount || 1));
 
-  // Find best and worst months for this perspective and model
+  // Per-machine calculations
+  const perMachineTotal = Math.round(totalPrimary / (avgTotalMachines || 1));
+  const perMachineDaily = Math.round(totalPrimary / ((avgTotalMachines || 1) * (totalDays || 1)));
+  const perMachineMonthly = Math.round(avgMonthlyPrimary / (avgTotalMachines || 1));
+
+  // Find best and worst months for this perspective based on G-count profit
   const sortedMonths = [...monthlyStats].sort((a, b) => {
     const valA = getEffectiveYen(a);
     const valB = getEffectiveYen(b);
@@ -79,6 +74,16 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
 
   const bestMonth = sortedMonths[0];
   const worstMonth = sortedMonths[sortedMonths.length - 1];
+
+  const bestPerMachine = bestMonth?.avgMachines > 0 ? Math.round(getEffectiveYen(bestMonth) / bestMonth.avgMachines) : 0;
+  const bestPerMachineDaily = (bestMonth?.avgMachines > 0 && bestMonth?.daysCount > 0)
+    ? Math.round(getEffectiveYen(bestMonth) / (bestMonth.avgMachines * bestMonth.daysCount))
+    : 0;
+
+  const worstPerMachine = worstMonth?.avgMachines > 0 ? Math.round(getEffectiveYen(worstMonth) / worstMonth.avgMachines) : 0;
+  const worstPerMachineDaily = (worstMonth?.avgMachines > 0 && worstMonth?.daysCount > 0)
+    ? Math.round(getEffectiveYen(worstMonth) / (worstMonth.avgMachines * worstMonth.daysCount))
+    : 0;
 
   const formatVal = (num: number) => {
     if (unit === 'yen') return formatYen(num);
@@ -96,13 +101,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       >
         <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
           <span>
-            {profitModel === 'gCount'
-              ? perspective === 'hall'
-                ? '期間累計 G数連動粗利'
-                : '期間累計 ユーザー収支'
-              : perspective === 'hall'
-              ? '期間累計 差枚粗利'
-              : '期間累計 ユーザー差枚収支'}
+            {perspective === 'hall' ? '期間累計 ホール粗利 (G数連動)' : '期間累計 ユーザー収支 (G数連動)'}
           </span>
           <span
             className={`p-1.5 rounded-lg ${
@@ -134,6 +133,13 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
             </span>
             <span className="text-slate-400">{monthsCount}ヶ月 ({totalDays}日)</span>
           </div>
+          {/* Per Machine Added */}
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">1台あたり累計:</span>
+            <span className="font-bold text-slate-900">
+              {formatVal(perMachineTotal)} / 台
+            </span>
+          </div>
         </div>
       </div>
 
@@ -143,7 +149,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
         className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
       >
         <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-          <span>{perspective === 'hall' ? '月平均 ホール利益' : '月平均 ユーザー収支'}</span>
+          <span>{perspective === 'hall' ? '月平均 ホール粗利' : '月平均 ユーザー収支'}</span>
           <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
             <TrendingUp className="w-4 h-4" />
           </span>
@@ -164,62 +170,56 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
             <span className="text-xs font-normal text-slate-400 ml-1">/月</span>
           </div>
           <div className="text-xs text-slate-500 mt-1 flex items-center justify-between">
-            <span>1日あたり: {formatVal(Math.round(totalPrimary / (totalDays || 1)))}</span>
+            <span>1台・月平均: <strong className="text-slate-700">{formatVal(perMachineMonthly)}/台</strong></span>
             <span className="text-slate-400">平均稼働 {formatNumber(avgGamesWeighted)}G</span>
+          </div>
+          {/* Per Machine Daily (台日粗利) Added */}
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">1台・1日平均 (台日粗利):</span>
+            <span className="font-bold text-indigo-700">
+              {formatVal(perMachineDaily)} / 台・日
+            </span>
           </div>
         </div>
       </div>
 
-      {/* 3. G数モデル特有指標 or 最高利益月 */}
-      {profitModel === 'gCount' || profitModel === 'comparison' ? (
-        <div
-          id="kpi-card-gap-profit"
-          className="bg-white rounded-xl p-5 border border-indigo-200/80 shadow-xs hover:shadow-md transition-shadow"
-        >
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-            <span>換金ギャップ利益 (G数寄与分)</span>
-            <span className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
-              <Zap className="w-4 h-4" />
+      {/* 3. 最高利益月 (店黒字No.1 / 客勝ちNo.1) */}
+      <div
+        id="kpi-card-best-month"
+        className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
+      >
+        <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+          <span>{perspective === 'hall' ? '最高利益月 (店黒字No.1)' : '最高出玉月 (客勝ちNo.1)'}</span>
+          <span className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
+            <Award className="w-4 h-4" />
+          </span>
+        </div>
+        <div className="mt-2">
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+              {bestMonth.label}
             </span>
           </div>
-          <div className="mt-2">
-            <div className="text-2xl sm:text-3xl font-extrabold text-amber-600">
-              +{formatYen(totalGapProfit)}
-            </div>
-            <div className="text-xs text-slate-500 mt-1 flex items-center justify-between">
-              <span>推定売上: {formatYen(totalRevenue)}</span>
-              <span className="text-indigo-600 font-bold">出玉率 {avgPayoutRate.toFixed(2)}%</span>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div
-          id="kpi-card-best-month"
-          className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
-        >
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-            <span>{perspective === 'hall' ? '最高利益月 (店黒字No.1)' : '最高出玉月 (客勝ちNo.1)'}</span>
-            <span className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
-              <Award className="w-4 h-4" />
+          <div className="text-xs mt-1 font-semibold text-emerald-600 flex items-center justify-between">
+            <span>{formatVal(getEffectiveYen(bestMonth))}</span>
+            <span className="text-slate-400 font-normal">
+              客平均 {bestMonth.avgDiffCoins > 0 ? `+${bestMonth.avgDiffCoins}` : bestMonth.avgDiffCoins}枚/台
             </span>
           </div>
-          <div className="mt-2">
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                {bestMonth.label}
+          {/* Per Machine Added */}
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">1台あたり月間:</span>
+            <span className="font-bold text-slate-900">
+              {formatVal(bestPerMachine)} / 台
+              <span className="text-[10px] text-slate-400 font-normal ml-1">
+                (日: {formatVal(bestPerMachineDaily)})
               </span>
-            </div>
-            <div className="text-xs mt-1 font-semibold text-emerald-600 flex items-center justify-between">
-              <span>{formatVal(getEffectiveYen(bestMonth))}</span>
-              <span className="text-slate-400 font-normal">
-                客平均 {bestMonth.avgDiffCoins > 0 ? `+${bestMonth.avgDiffCoins}` : bestMonth.avgDiffCoins}枚
-              </span>
-            </div>
+            </span>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* 4. 最大還元月 (店赤字) or モデル比較 */}
+      {/* 4. 最大還元月 (店赤字No.1) or 最低収支月 */}
       <div
         id="kpi-card-worst-month"
         className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
@@ -239,7 +239,17 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
           <div className="text-xs mt-1 font-semibold text-rose-600 flex items-center justify-between">
             <span>{formatVal(getEffectiveYen(worstMonth))}</span>
             <span className="text-slate-400 font-normal">
-              客平均 {worstMonth.avgDiffCoins > 0 ? `+${worstMonth.avgDiffCoins}` : worstMonth.avgDiffCoins}枚
+              客平均 {worstMonth.avgDiffCoins > 0 ? `+${worstMonth.avgDiffCoins}` : worstMonth.avgDiffCoins}枚/台
+            </span>
+          </div>
+          {/* Per Machine Added */}
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">1台あたり月間:</span>
+            <span className="font-bold text-slate-900">
+              {formatVal(worstPerMachine)} / 台
+              <span className="text-[10px] text-slate-400 font-normal ml-1">
+                (日: {formatVal(worstPerMachineDaily)})
+              </span>
             </span>
           </div>
         </div>
