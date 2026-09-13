@@ -49,6 +49,7 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
   const [sortField, setSortField] = useState<'tail' | 'avgDiffCoins' | 'hallYen' | 'avgGames' | 'payoutRate' | 'winRate' | 'rank'>('tail');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [chartMetric, setChartMetric] = useState<'avgDiffCoins' | 'dailyProfit' | 'payoutRate'>('avgDiffCoins');
+  const isHall = perspective === 'hall';
 
   // Check which tail is designated as a store event day
   const isTargetStoreEventTail = (tail: TailIdentifier): boolean => {
@@ -114,6 +115,11 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
           dailyPlayerProfit: 0,
           totalDiffCoins: 0,
           avgDiffCoins: 0,
+          displayDiffCoins: 0,
+          displayDailyProfit: 0,
+          displayTotalProfit: 0,
+          displayPerMachineDailyProfit: 0,
+          displayPerMachineTotalProfit: 0,
           avgGames: 0,
           payoutRate: 100,
           playerWinDays: 0,
@@ -133,9 +139,9 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
       const avgDiffCoins = Math.round((records.reduce((acc, r) => acc + r.avgDiffCoins, 0) / count) * 10) / 10;
       const avgGames = Math.round(records.reduce((acc, r) => acc + r.avgGames, 0) / count);
 
-      const totalInCoins = records.reduce((acc, r) => acc + (r.inCoins || 0), 0);
-      const totalOutCoins = records.reduce((acc, r) => acc + (r.outCoins || 0), 0);
-      const payoutRate = totalInCoins > 0 ? (totalOutCoins / totalInCoins) * 100 : 100;
+      // Average of daily payout rates
+      const avgPayoutRate = records.reduce((acc, r) => acc + (r.payoutRate || 100), 0) / count;
+      const payoutRate = Math.round(avgPayoutRate * 100) / 100;
 
       const playerWinDays = records.filter((r) => r.avgDiffCoins > 0).length;
       const playerWinRate = Math.round((playerWinDays / count) * 1000) / 10;
@@ -145,6 +151,14 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
       const perMachineDailyProfit = avgMachines > 0 ? Math.round(dailyHallProfit / avgMachines) : 0;
       const perMachineDailyPlayerProfit = avgMachines > 0 ? Math.round(dailyPlayerProfit / avgMachines) : 0;
       const perMachineTotalProfit = avgMachines > 0 ? Math.round(totalHallProfit / avgMachines) : 0;
+      const perMachineTotalPlayerProfit = avgMachines > 0 ? Math.round(totalPlayerProfit / avgMachines) : 0;
+
+      // Perspective-adapted metrics
+      const displayDiffCoins = perspective === 'hall' ? -avgDiffCoins : avgDiffCoins;
+      const displayDailyProfit = perspective === 'hall' ? dailyHallProfit : dailyPlayerProfit;
+      const displayTotalProfit = perspective === 'hall' ? totalHallProfit : totalPlayerProfit;
+      const displayPerMachineDailyProfit = perspective === 'hall' ? perMachineDailyProfit : perMachineDailyPlayerProfit;
+      const displayPerMachineTotalProfit = perspective === 'hall' ? perMachineTotalProfit : perMachineTotalPlayerProfit;
 
       // Also verify if majority of days were marked as old event day
       const eventDaysCount = records.filter((r) => r.isOldEventDay).length;
@@ -159,6 +173,12 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
         perMachineDailyProfit,
         perMachineDailyPlayerProfit,
         perMachineTotalProfit,
+        perMachineTotalPlayerProfit,
+        displayDiffCoins,
+        displayDailyProfit,
+        displayTotalProfit,
+        displayPerMachineDailyProfit,
+        displayPerMachineTotalProfit,
         totalHallProfit,
         dailyHallProfit,
         totalPlayerProfit,
@@ -173,7 +193,7 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
         records: records.sort((a, b) => b.date.localeCompare(a.date)),
       };
     });
-  }, [dailyRecords, oldEventDays, specialDayRules]);
+  }, [dailyRecords, oldEventDays, specialDayRules, perspective]);
 
   // Add player & hall rankings
   const rankedTailStats = useMemo(() => {
@@ -246,8 +266,16 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
         const rankB = perspective === 'hall' ? b.rankHall : b.rankPlayer;
         diff = rankA - rankB;
       }
-      else if (sortField === 'avgDiffCoins') diff = a.avgDiffCoins - b.avgDiffCoins;
-      else if (sortField === 'hallYen') diff = a.dailyHallProfit - b.dailyHallProfit;
+      else if (sortField === 'avgDiffCoins') {
+        const valA = perspective === 'hall' ? -a.avgDiffCoins : a.avgDiffCoins;
+        const valB = perspective === 'hall' ? -b.avgDiffCoins : b.avgDiffCoins;
+        diff = valA - valB;
+      }
+      else if (sortField === 'hallYen') {
+        const valA = perspective === 'hall' ? a.dailyHallProfit : a.dailyPlayerProfit;
+        const valB = perspective === 'hall' ? b.dailyHallProfit : b.dailyPlayerProfit;
+        diff = valA - valB;
+      }
       else if (sortField === 'avgGames') diff = a.avgGames - b.avgGames;
       else if (sortField === 'payoutRate') diff = a.payoutRate - b.payoutRate;
       else if (sortField === 'winRate') diff = a.playerWinRate - b.playerWinRate;
@@ -328,27 +356,33 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
               <span className="font-bold">{data.count}日間</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">客平均差枚/台:</span>
-              <span className={`font-bold ${data.avgDiffCoins > 0 ? 'text-blue-400' : 'text-slate-200'}`}>
-                {data.avgDiffCoins > 0 ? `+${data.avgDiffCoins}` : data.avgDiffCoins} 枚
+              <span className="text-slate-400">{isHall ? 'ホール平均差枚/台:' : '客平均差枚/台:'}</span>
+              <span
+                className={`font-bold ${
+                  data.displayDiffCoins > 0
+                    ? isHall ? 'text-indigo-300' : 'text-blue-400'
+                    : 'text-rose-400'
+                }`}
+              >
+                {data.displayDiffCoins > 0 ? `+${data.displayDiffCoins}` : data.displayDiffCoins} 枚
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">{isHall ? '1日平均ホール粗利:' : '1日平均ユーザー収支:'}</span>
+              <span className="text-slate-400">{isHall ? '1日平均ホール粗利:' : '1日平均客収支:'}</span>
               <span
                 className={`font-bold ${
-                  (isHall ? data.dailyHallProfit : data.dailyPlayerProfit) >= 0
+                  data.displayDailyProfit >= 0
                     ? isHall ? 'text-emerald-400' : 'text-blue-400'
                     : 'text-rose-400'
                 }`}
               >
-                {formatYen(isHall ? data.dailyHallProfit : data.dailyPlayerProfit)}
+                {formatYen(data.displayDailyProfit)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">1台あたり収支:</span>
+              <span className="text-slate-400">{isHall ? '1台あたり粗利:' : '1台あたり収支:'}</span>
               <span className="font-bold text-amber-300">
-                {formatYen(isHall ? data.perMachineDailyProfit : data.perMachineDailyPlayerProfit)}/台・日
+                {formatYen(data.displayPerMachineDailyProfit)}/台・日
               </span>
             </div>
             <div className="flex justify-between">
@@ -406,7 +440,7 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            客平均差枚
+            {isHall ? 'ホール平均差枚' : '客平均差枚'}
           </button>
           <button
             type="button"
@@ -417,7 +451,7 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            1日平均粗利
+            {isHall ? '1日平均粗利' : '1日平均客収支'}
           </button>
           <button
             type="button"
@@ -668,16 +702,20 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
             <BarChart2 className="w-4 h-4 text-indigo-600" />
             <span>
               {chartMetric === 'avgDiffCoins'
-                ? '0〜9のつく日別 客平均差枚（棒） & 台平均稼働G数（折れ線）'
+                ? isHall
+                  ? '0〜9のつく日別 ホール平均差枚（棒） & 台平均稼働G数（折れ線）'
+                  : '0〜9のつく日別 客平均差枚（棒） & 台平均稼働G数（折れ線）'
                 : chartMetric === 'dailyProfit'
-                ? '0〜9のつく日別 1日平均ホール粗利（棒） & 台平均稼働G数（折れ線）'
+                ? isHall
+                  ? '0〜9のつく日別 1日平均ホール粗利（棒） & 台平均稼働G数（折れ線）'
+                  : '0〜9のつく日別 1日平均客収支（棒） & 台平均稼働G数（折れ線）'
                 : '0〜9のつく日別 機械割・出玉率（棒） & 台平均稼働G数（折れ線）'}
             </span>
           </div>
           <span className="text-slate-400">※各棒をクリックすると詳細明細を展開します</span>
         </div>
 
-        <div className="h-64 sm:h-72 w-full">
+        <div key={`tail-chart-${chartMetric}-${perspective}`} className="h-64 sm:h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={tailStats}
@@ -704,13 +742,16 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => {
-                  if (chartMetric === 'avgDiffCoins') return `${v}枚`;
+                  if (chartMetric === 'avgDiffCoins') return `${v > 0 ? `+${v}` : v}枚`;
                   if (chartMetric === 'dailyProfit') return `${Math.round(v / 10000)}万`;
-                  return `${v}%`;
+                  return `${Number(v).toFixed(1).replace(/\.0$/, '')}%`;
                 }}
                 domain={
                   chartMetric === 'payoutRate'
-                    ? ['dataMin - 1', 'dataMax + 1']
+                    ? [
+                        (dataMin: number) => Math.floor(Math.min(dataMin, 99.5) * 2) / 2,
+                        (dataMax: number) => Math.ceil(Math.max(dataMax, 100.5) * 2) / 2,
+                      ]
                     : ['auto', 'auto']
                 }
               />
@@ -738,9 +779,9 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                 yAxisId="left"
                 dataKey={
                   chartMetric === 'avgDiffCoins'
-                    ? 'avgDiffCoins'
+                    ? 'displayDiffCoins'
                     : chartMetric === 'dailyProfit'
-                    ? 'dailyHallProfit'
+                    ? 'displayDailyProfit'
                     : 'payoutRate'
                 }
                 radius={[4, 4, 0, 0]}
@@ -749,9 +790,17 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                 {tailStats.map((entry, idx) => {
                   let fillColor = '#6366f1';
                   if (chartMetric === 'avgDiffCoins') {
-                    fillColor = entry.avgDiffCoins > 0 ? '#3b82f6' : '#f43f5e';
+                    if (isHall) {
+                      fillColor = entry.displayDiffCoins >= 0 ? '#6366f1' : '#f43f5e';
+                    } else {
+                      fillColor = entry.displayDiffCoins >= 0 ? '#3b82f6' : '#f43f5e';
+                    }
                   } else if (chartMetric === 'dailyProfit') {
-                    fillColor = entry.dailyHallProfit >= 0 ? '#6366f1' : '#f43f5e';
+                    if (isHall) {
+                      fillColor = entry.displayDailyProfit >= 0 ? '#6366f1' : '#f43f5e';
+                    } else {
+                      fillColor = entry.displayDailyProfit >= 0 ? '#3b82f6' : '#f43f5e';
+                    }
                   } else {
                     fillColor = entry.payoutRate >= 100 ? '#10b981' : '#f43f5e';
                   }
@@ -808,7 +857,7 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap text-blue-700"
               >
                 <div className="flex items-center justify-end gap-1">
-                  客平均差枚
+                  {isHall ? 'ホール平均差枚' : '客平均差枚'}
                   {sortField === 'avgDiffCoins' && (sortOrder === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />)}
                 </div>
               </th>
@@ -817,11 +866,13 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap text-indigo-700"
               >
                 <div className="flex items-center justify-end gap-1">
-                  1日平均粗利
+                  {isHall ? '1日平均粗利' : '1日平均客収支'}
                   {sortField === 'hallYen' && (sortOrder === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />)}
                 </div>
               </th>
-              <th className="py-3 px-3 text-right whitespace-nowrap">期間累計粗利</th>
+              <th className="py-3 px-3 text-right whitespace-nowrap">
+                {isHall ? '期間累計粗利' : '期間累計客収支'}
+              </th>
               <th
                 onClick={() => handleSort('avgGames')}
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap"
@@ -934,46 +985,58 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                       {t.count > 0 ? (
                         <span
                           className={`inline-block px-2 py-0.5 rounded font-black ${
-                            t.avgDiffCoins >= 100
+                            isHall
+                              ? t.displayDiffCoins >= 100
+                                ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                : t.displayDiffCoins > 0
+                                ? 'bg-indigo-50 text-indigo-700'
+                                : t.displayDiffCoins <= -150
+                                ? 'bg-rose-50 text-rose-800'
+                                : 'text-slate-700'
+                              : t.displayDiffCoins >= 100
                               ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                              : t.avgDiffCoins > 0
+                              : t.displayDiffCoins > 0
                               ? 'bg-blue-50 text-blue-700'
-                              : t.avgDiffCoins <= -150
+                              : t.displayDiffCoins <= -150
                               ? 'bg-rose-50 text-rose-800'
                               : 'text-slate-700'
                           }`}
                         >
-                          {t.avgDiffCoins > 0 ? `+${t.avgDiffCoins}` : t.avgDiffCoins} 枚/台
+                          {t.displayDiffCoins > 0 ? `+${t.displayDiffCoins}` : t.displayDiffCoins} 枚/台
                         </span>
                       ) : (
                         '-'
                       )}
                     </td>
 
-                    {/* Daily Hall Profit */}
+                    {/* Daily Hall / Player Profit */}
                     <td
                       className={`py-3 px-3 text-right font-extrabold whitespace-nowrap ${
-                        t.dailyHallProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'
+                        t.displayDailyProfit >= 0
+                          ? isHall ? 'text-indigo-600' : 'text-blue-600'
+                          : 'text-rose-600'
                       }`}
                     >
-                      <div>{t.count > 0 ? formatYen(t.dailyHallProfit) : '-'}</div>
+                      <div>{t.count > 0 ? formatYen(t.displayDailyProfit) : '-'}</div>
                       {t.count > 0 && (
                         <div className="text-[10px] text-slate-500 font-normal">
-                          {formatYen(t.perMachineDailyProfit)}/台
+                          {formatYen(t.displayPerMachineDailyProfit)}/台
                         </div>
                       )}
                     </td>
 
-                    {/* Total Hall Profit */}
+                    {/* Total Hall / Player Profit */}
                     <td
                       className={`py-3 px-3 text-right font-semibold whitespace-nowrap ${
-                        t.totalHallProfit >= 0 ? 'text-slate-800' : 'text-rose-600'
+                        t.displayTotalProfit >= 0
+                          ? isHall ? 'text-slate-800' : 'text-blue-700'
+                          : 'text-rose-600'
                       }`}
                     >
-                      <div>{t.count > 0 ? formatYen(t.totalHallProfit) : '-'}</div>
+                      <div>{t.count > 0 ? formatYen(t.displayTotalProfit) : '-'}</div>
                       {t.count > 0 && (
                         <div className="text-[10px] text-slate-400 font-normal">
-                          {formatYen(t.perMachineTotalProfit)}/台
+                          {formatYen(t.displayPerMachineTotalProfit)}/台
                         </div>
                       )}
                     </td>
@@ -1057,9 +1120,15 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                                 <tr>
                                   <th className="py-2 px-3">日付</th>
                                   <th className="py-2 px-3">区分</th>
-                                  <th className="py-2 px-3 text-right">客平均差枚</th>
-                                  <th className="py-2 px-3 text-right">ホール粗利(G数連動)</th>
-                                  <th className="py-2 px-3 text-right">総差枚</th>
+                                  <th className="py-2 px-3 text-right">
+                                    {isHall ? 'ホール平均差枚' : '客平均差枚'}
+                                  </th>
+                                  <th className="py-2 px-3 text-right">
+                                    {isHall ? 'ホール粗利(G数連動)' : '客側収支(推計)'}
+                                  </th>
+                                  <th className="py-2 px-3 text-right">
+                                    {isHall ? 'ホール総差枚' : '客側総差枚'}
+                                  </th>
                                   <th className="py-2 px-3 text-right">平均稼働G数</th>
                                   <th className="py-2 px-3 text-right">出玉率</th>
                                   <th className="py-2 px-3 text-right">勝率</th>
@@ -1093,23 +1162,27 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                                       </td>
                                       <td
                                         className={`py-2 px-3 text-right font-bold whitespace-nowrap ${
-                                          r.avgDiffCoins > 0 ? 'text-blue-600' : 'text-slate-700'
+                                          (isHall ? -r.avgDiffCoins : r.avgDiffCoins) > 0
+                                            ? isHall ? 'text-indigo-600' : 'text-blue-600'
+                                            : 'text-rose-600'
                                         }`}
                                       >
-                                        {r.avgDiffCoins > 0 ? `+${r.avgDiffCoins}` : r.avgDiffCoins}枚
+                                        {(isHall ? -r.avgDiffCoins : r.avgDiffCoins) > 0 ? `+${isHall ? -r.avgDiffCoins : r.avgDiffCoins}` : (isHall ? -r.avgDiffCoins : r.avgDiffCoins)}枚
                                       </td>
                                       <td
                                         className={`py-2 px-3 text-right font-extrabold whitespace-nowrap ${
-                                          r.gModelHallProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'
+                                          (isHall ? r.gModelHallProfit : r.gModelPlayerProfit) >= 0
+                                            ? isHall ? 'text-indigo-600' : 'text-blue-600'
+                                            : 'text-rose-600'
                                         }`}
                                       >
-                                        <div>{formatYen(r.gModelHallProfit)}</div>
+                                        <div>{formatYen(isHall ? r.gModelHallProfit : r.gModelPlayerProfit)}</div>
                                         <div className="text-[10px] text-slate-400 font-normal">
-                                          {formatYen(Math.round(r.gModelHallProfit / (r.totalMachines || 587)))}/台
+                                          {formatYen(Math.round((isHall ? r.gModelHallProfit : r.gModelPlayerProfit) / (r.totalMachines || 587)))}/台
                                         </div>
                                       </td>
                                       <td className="py-2 px-3 text-right text-slate-600 whitespace-nowrap">
-                                        {formatCoins(r.totalDiffCoins)}
+                                        {formatCoins(isHall ? -r.totalDiffCoins : r.totalDiffCoins)}
                                       </td>
                                       <td className="py-2 px-3 text-right text-slate-700 whitespace-nowrap">
                                         {formatNumber(r.avgGames)}G

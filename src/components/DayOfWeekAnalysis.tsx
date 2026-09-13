@@ -46,6 +46,7 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
   const [sortField, setSortField] = useState<'dow' | 'avgDiffCoins' | 'hallYen' | 'avgGames' | 'payoutRate' | 'winRate'>('dow');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [chartMetric, setChartMetric] = useState<'avgDiffCoins' | 'dailyProfit' | 'payoutRate'>('avgDiffCoins');
+  const isHall = perspective === 'hall';
 
   // Days of week order (including holidays)
   const dows = ['月', '火', '水', '木', '金', '土', '日', '祝'];
@@ -104,6 +105,11 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
           dailyPlayerProfit: 0,
           totalDiffCoins: 0,
           avgDiffCoins: 0,
+          displayDiffCoins: 0,
+          displayDailyProfit: 0,
+          displayTotalProfit: 0,
+          displayPerMachineDailyProfit: 0,
+          displayPerMachineTotalProfit: 0,
           avgGames: 0,
           payoutRate: 100,
           playerWinDays: 0,
@@ -122,9 +128,9 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
       const avgDiffCoins = Math.round((records.reduce((acc, r) => acc + r.avgDiffCoins, 0) / count) * 10) / 10;
       const avgGames = Math.round(records.reduce((acc, r) => acc + r.avgGames, 0) / count);
 
-      const totalInCoins = records.reduce((acc, r) => acc + (r.inCoins || 0), 0);
-      const totalOutCoins = records.reduce((acc, r) => acc + (r.outCoins || 0), 0);
-      const payoutRate = totalInCoins > 0 ? (totalOutCoins / totalInCoins) * 100 : 100;
+      // Average of daily payout rates
+      const avgPayoutRate = records.reduce((acc, r) => acc + (r.payoutRate || 100), 0) / count;
+      const payoutRate = Math.round(avgPayoutRate * 100) / 100;
 
       const playerWinDays = records.filter((r) => r.avgDiffCoins > 0).length;
       const playerWinRate = Math.round((playerWinDays / count) * 1000) / 10;
@@ -135,6 +141,13 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
       const perMachineDailyPlayerProfit = avgMachines > 0 ? Math.round(dailyPlayerProfit / avgMachines) : 0;
       const perMachineTotalProfit = avgMachines > 0 ? Math.round(totalHallProfit / avgMachines) : 0;
       const perMachineTotalPlayerProfit = avgMachines > 0 ? Math.round(totalPlayerProfit / avgMachines) : 0;
+
+      // Perspective-adapted metrics
+      const displayDiffCoins = perspective === 'hall' ? -avgDiffCoins : avgDiffCoins;
+      const displayDailyProfit = perspective === 'hall' ? dailyHallProfit : dailyPlayerProfit;
+      const displayTotalProfit = perspective === 'hall' ? totalHallProfit : totalPlayerProfit;
+      const displayPerMachineDailyProfit = perspective === 'hall' ? perMachineDailyProfit : perMachineDailyPlayerProfit;
+      const displayPerMachineTotalProfit = perspective === 'hall' ? perMachineTotalProfit : perMachineTotalPlayerProfit;
 
       return {
         dow,
@@ -148,6 +161,11 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
         perMachineDailyPlayerProfit,
         perMachineTotalProfit,
         perMachineTotalPlayerProfit,
+        displayDiffCoins,
+        displayDailyProfit,
+        displayTotalProfit,
+        displayPerMachineDailyProfit,
+        displayPerMachineTotalProfit,
         totalHallProfit,
         dailyHallProfit,
         totalPlayerProfit,
@@ -161,7 +179,7 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
         records: records.sort((a, b) => b.date.localeCompare(a.date)),
       };
     });
-  }, [dailyRecords]);
+  }, [dailyRecords, perspective]);
 
   // Rankings
   const bestPlayerDow = useMemo(() => {
@@ -191,26 +209,44 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
     const summarize = (records: DailyRecord[], label: string) => {
       const count = records.length;
       if (count === 0) {
-        return { label, count: 0, avgDiff: 0, avgGames: 0, dailyHall: 0, payoutRate: 100, winRate: 0, perMachineDaily: 0 };
+        return {
+          label,
+          count: 0,
+          avgDiff: 0,
+          displayAvgDiff: 0,
+          avgGames: 0,
+          dailyHall: 0,
+          displayDailyProfit: 0,
+          payoutRate: 100,
+          winRate: 0,
+          perMachineDaily: 0,
+        };
       }
       const avgDiff = Math.round((records.reduce((acc, r) => acc + r.avgDiffCoins, 0) / count) * 10) / 10;
       const avgGames = Math.round(records.reduce((acc, r) => acc + r.avgGames, 0) / count);
       const totalHall = records.reduce((acc, r) => acc + (r.gModelHallProfit || 0), 0);
       const dailyHall = Math.round(totalHall / count);
-      const totalIn = records.reduce((acc, r) => acc + (r.inCoins || 0), 0);
-      const totalOut = records.reduce((acc, r) => acc + (r.outCoins || 0), 0);
-      const payoutRate = totalIn > 0 ? (totalOut / totalIn) * 100 : 100;
+      const totalPlayer = records.reduce((acc, r) => acc + (r.gModelPlayerProfit || 0), 0);
+      const dailyPlayer = Math.round(totalPlayer / count);
+
+      const avgPayoutRate = records.reduce((acc, r) => acc + (r.payoutRate || 100), 0) / count;
+      const payoutRate = Math.round(avgPayoutRate * 100) / 100;
       const winDays = records.filter((r) => r.avgDiffCoins > 0).length;
       const winRate = Math.round((winDays / count) * 1000) / 10;
       const avgMachines = Math.round(records.reduce((acc, r) => acc + (r.totalMachines || 587), 0) / count);
       const perMachineDaily = avgMachines > 0 ? Math.round(dailyHall / avgMachines) : 0;
 
+      const displayAvgDiff = perspective === 'hall' ? -avgDiff : avgDiff;
+      const displayDailyProfit = perspective === 'hall' ? dailyHall : dailyPlayer;
+
       return {
         label,
         count,
         avgDiff,
+        displayAvgDiff,
         avgGames,
         dailyHall,
+        displayDailyProfit,
         payoutRate,
         winRate,
         perMachineDaily,
@@ -222,7 +258,7 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
       weekend: summarize(weekendRecords, '週末 (土日・祝除く)'),
       holiday: summarize(holidayRecords, '祝日 (祝祭日・振替休日)'),
     };
-  }, [dailyRecords]);
+  }, [dailyRecords, perspective]);
 
   // Weekend vs Weekday analysis (legacy compatibility)
   const weekendVsWeekday = useMemo(() => {
@@ -259,8 +295,16 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
     list.sort((a, b) => {
       let diff = 0;
       if (sortField === 'dow') diff = dowOrderMap[a.dow] - dowOrderMap[b.dow];
-      else if (sortField === 'avgDiffCoins') diff = a.avgDiffCoins - b.avgDiffCoins;
-      else if (sortField === 'hallYen') diff = a.dailyHallProfit - b.dailyHallProfit;
+      else if (sortField === 'avgDiffCoins') {
+        const valA = perspective === 'hall' ? -a.avgDiffCoins : a.avgDiffCoins;
+        const valB = perspective === 'hall' ? -b.avgDiffCoins : b.avgDiffCoins;
+        diff = valA - valB;
+      }
+      else if (sortField === 'hallYen') {
+        const valA = perspective === 'hall' ? a.dailyHallProfit : a.dailyPlayerProfit;
+        const valB = perspective === 'hall' ? b.dailyHallProfit : b.dailyPlayerProfit;
+        diff = valA - valB;
+      }
       else if (sortField === 'avgGames') diff = a.avgGames - b.avgGames;
       else if (sortField === 'payoutRate') diff = a.payoutRate - b.payoutRate;
       else if (sortField === 'winRate') diff = a.playerWinRate - b.playerWinRate;
@@ -268,7 +312,7 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
       return sortOrder === 'asc' ? diff : -diff;
     });
     return list;
-  }, [dowStats, sortField, sortOrder]);
+  }, [dowStats, sortField, sortOrder, perspective]);
 
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) {
@@ -345,27 +389,33 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
               <span className="font-bold">{data.count}日間</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">客平均差枚/台:</span>
-              <span className={`font-bold ${data.avgDiffCoins > 0 ? 'text-blue-400' : 'text-slate-200'}`}>
-                {data.avgDiffCoins > 0 ? `+${data.avgDiffCoins}` : data.avgDiffCoins} 枚
+              <span className="text-slate-400">{isHall ? 'ホール平均差枚/台:' : '客平均差枚/台:'}</span>
+              <span
+                className={`font-bold ${
+                  data.displayDiffCoins > 0
+                    ? isHall ? 'text-indigo-300' : 'text-blue-400'
+                    : 'text-rose-400'
+                }`}
+              >
+                {data.displayDiffCoins > 0 ? `+${data.displayDiffCoins}` : data.displayDiffCoins} 枚
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">{isHall ? '1日平均ホール粗利:' : '1日平均ユーザー収支:'}</span>
+              <span className="text-slate-400">{isHall ? '1日平均ホール粗利:' : '1日平均客収支:'}</span>
               <span
                 className={`font-bold ${
-                  (isHall ? data.dailyHallProfit : data.dailyPlayerProfit) >= 0
+                  data.displayDailyProfit >= 0
                     ? isHall ? 'text-emerald-400' : 'text-blue-400'
                     : 'text-rose-400'
                 }`}
               >
-                {formatYen(isHall ? data.dailyHallProfit : data.dailyPlayerProfit)}
+                {formatYen(data.displayDailyProfit)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">1台あたり収支:</span>
+              <span className="text-slate-400">{isHall ? '1台あたり粗利:' : '1台あたり収支:'}</span>
               <span className="font-bold text-amber-300">
-                {formatYen(isHall ? data.perMachineDailyProfit : data.perMachineDailyPlayerProfit)}/台・日
+                {formatYen(data.displayPerMachineDailyProfit)}/台・日
               </span>
             </div>
             <div className="flex justify-between">
@@ -423,7 +473,7 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            客平均差枚
+            {isHall ? 'ホール平均差枚' : '客平均差枚'}
           </button>
           <button
             type="button"
@@ -434,7 +484,7 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            1日平均粗利
+            {isHall ? '1日平均粗利' : '1日平均客収支'}
           </button>
           <button
             type="button"
@@ -607,9 +657,9 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
             </div>
             <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
               <div>
-                <div className="text-[10px] text-slate-400">客平均差枚</div>
-                <div className={`font-black ${threeWayStats.weekday.avgDiff > 0 ? 'text-blue-600' : 'text-slate-800'}`}>
-                  {threeWayStats.weekday.avgDiff > 0 ? `+${threeWayStats.weekday.avgDiff}` : threeWayStats.weekday.avgDiff} 枚
+                <div className="text-[10px] text-slate-400">{isHall ? 'ホール平均差枚' : '客平均差枚'}</div>
+                <div className={`font-black ${threeWayStats.weekday.displayAvgDiff > 0 ? (isHall ? 'text-indigo-600' : 'text-blue-600') : 'text-slate-800'}`}>
+                  {threeWayStats.weekday.displayAvgDiff > 0 ? `+${threeWayStats.weekday.displayAvgDiff}` : threeWayStats.weekday.displayAvgDiff} 枚
                 </div>
               </div>
               <div>
@@ -625,9 +675,9 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400">1日ホール粗利</div>
-                <div className="font-bold text-slate-800">
-                  {formatYen(threeWayStats.weekday.dailyHall)}
+                <div className="text-[10px] text-slate-400">{isHall ? '1日ホール粗利' : '1日客収支'}</div>
+                <div className={`font-bold ${threeWayStats.weekday.displayDailyProfit >= 0 ? (isHall ? 'text-slate-800' : 'text-blue-600') : 'text-rose-600'}`}>
+                  {formatYen(threeWayStats.weekday.displayDailyProfit)}
                 </div>
               </div>
             </div>
@@ -646,9 +696,9 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
             </div>
             <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
               <div>
-                <div className="text-[10px] text-slate-400">客平均差枚</div>
-                <div className={`font-black ${threeWayStats.weekend.avgDiff > 0 ? 'text-blue-600' : 'text-slate-800'}`}>
-                  {threeWayStats.weekend.avgDiff > 0 ? `+${threeWayStats.weekend.avgDiff}` : threeWayStats.weekend.avgDiff} 枚
+                <div className="text-[10px] text-slate-400">{isHall ? 'ホール平均差枚' : '客平均差枚'}</div>
+                <div className={`font-black ${threeWayStats.weekend.displayAvgDiff > 0 ? (isHall ? 'text-indigo-600' : 'text-blue-600') : 'text-slate-800'}`}>
+                  {threeWayStats.weekend.displayAvgDiff > 0 ? `+${threeWayStats.weekend.displayAvgDiff}` : threeWayStats.weekend.displayAvgDiff} 枚
                 </div>
               </div>
               <div>
@@ -669,9 +719,9 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400">1日ホール粗利</div>
-                <div className="font-bold text-slate-800">
-                  {formatYen(threeWayStats.weekend.dailyHall)}
+                <div className="text-[10px] text-slate-400">{isHall ? '1日ホール粗利' : '1日客収支'}</div>
+                <div className={`font-bold ${threeWayStats.weekend.displayDailyProfit >= 0 ? (isHall ? 'text-slate-800' : 'text-blue-600') : 'text-rose-600'}`}>
+                  {formatYen(threeWayStats.weekend.displayDailyProfit)}
                 </div>
               </div>
             </div>
@@ -690,9 +740,9 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
             </div>
             <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
               <div>
-                <div className="text-[10px] text-slate-400">客平均差枚</div>
-                <div className={`font-black ${threeWayStats.holiday.avgDiff > 0 ? 'text-blue-600' : 'text-slate-800'}`}>
-                  {threeWayStats.holiday.avgDiff > 0 ? `+${threeWayStats.holiday.avgDiff}` : threeWayStats.holiday.avgDiff} 枚
+                <div className="text-[10px] text-slate-400">{isHall ? 'ホール平均差枚' : '客平均差枚'}</div>
+                <div className={`font-black ${threeWayStats.holiday.displayAvgDiff > 0 ? (isHall ? 'text-indigo-600' : 'text-blue-600') : 'text-slate-800'}`}>
+                  {threeWayStats.holiday.displayAvgDiff > 0 ? `+${threeWayStats.holiday.displayAvgDiff}` : threeWayStats.holiday.displayAvgDiff} 枚
                 </div>
               </div>
               <div>
@@ -708,9 +758,9 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] text-slate-400">1日ホール粗利</div>
-                <div className="font-bold text-slate-800">
-                  {formatYen(threeWayStats.holiday.dailyHall)}
+                <div className="text-[10px] text-slate-400">{isHall ? '1日ホール粗利' : '1日客収支'}</div>
+                <div className={`font-bold ${threeWayStats.holiday.displayDailyProfit >= 0 ? (isHall ? 'text-slate-800' : 'text-blue-600') : 'text-rose-600'}`}>
+                  {formatYen(threeWayStats.holiday.displayDailyProfit)}
                 </div>
               </div>
             </div>
@@ -725,16 +775,20 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
             <BarChart2 className="w-4 h-4 text-indigo-600" />
             <span>
               {chartMetric === 'avgDiffCoins'
-                ? '曜日別 客平均差枚（棒） & 台平均稼働G数（折れ線）'
+                ? isHall
+                  ? '曜日別 ホール平均差枚（棒） & 台平均稼働G数（折れ線）'
+                  : '曜日別 客平均差枚（棒） & 台平均稼働G数（折れ線）'
                 : chartMetric === 'dailyProfit'
-                ? '曜日別 1日平均ホール粗利（棒） & 台平均稼働G数（折れ線）'
+                ? isHall
+                  ? '曜日別 1日平均ホール粗利（棒） & 台平均稼働G数（折れ線）'
+                  : '曜日別 1日平均客収支（棒） & 台平均稼働G数（折れ線）'
                 : '曜日別 機械割・出玉率（棒） & 台平均稼働G数（折れ線）'}
             </span>
           </div>
           <span className="text-slate-400">※各棒をクリックすると詳細明細を展開します</span>
         </div>
 
-        <div className="h-64 sm:h-72 w-full">
+        <div key={`dow-chart-${chartMetric}-${perspective}`} className="h-64 sm:h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={dowStats}
@@ -760,13 +814,16 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => {
-                  if (chartMetric === 'avgDiffCoins') return `${v}枚`;
+                  if (chartMetric === 'avgDiffCoins') return `${v > 0 ? `+${v}` : v}枚`;
                   if (chartMetric === 'dailyProfit') return `${Math.round(v / 10000)}万`;
-                  return `${v}%`;
+                  return `${Number(v).toFixed(1).replace(/\.0$/, '')}%`;
                 }}
                 domain={
                   chartMetric === 'payoutRate'
-                    ? ['dataMin - 1', 'dataMax + 1']
+                    ? [
+                        (dataMin: number) => Math.floor(Math.min(dataMin, 99.5) * 2) / 2,
+                        (dataMax: number) => Math.ceil(Math.max(dataMax, 100.5) * 2) / 2,
+                      ]
                     : ['auto', 'auto']
                 }
               />
@@ -794,9 +851,9 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                 yAxisId="left"
                 dataKey={
                   chartMetric === 'avgDiffCoins'
-                    ? 'avgDiffCoins'
+                    ? 'displayDiffCoins'
                     : chartMetric === 'dailyProfit'
-                    ? 'dailyHallProfit'
+                    ? 'displayDailyProfit'
                     : 'payoutRate'
                 }
                 radius={[4, 4, 0, 0]}
@@ -812,9 +869,17 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                     fillColor = '#3b82f6'; // Blue for Saturday
                   } else {
                     if (chartMetric === 'avgDiffCoins') {
-                      fillColor = entry.avgDiffCoins > 0 ? '#10b981' : '#64748b';
+                      if (isHall) {
+                        fillColor = entry.displayDiffCoins >= 0 ? '#6366f1' : '#f43f5e';
+                      } else {
+                        fillColor = entry.displayDiffCoins >= 0 ? '#10b981' : '#64748b';
+                      }
                     } else if (chartMetric === 'dailyProfit') {
-                      fillColor = entry.dailyHallProfit >= 0 ? '#6366f1' : '#f43f5e';
+                      if (isHall) {
+                        fillColor = entry.displayDailyProfit >= 0 ? '#6366f1' : '#f43f5e';
+                      } else {
+                        fillColor = entry.displayDailyProfit >= 0 ? '#10b981' : '#f43f5e';
+                      }
                     } else {
                       fillColor = entry.payoutRate >= 100 ? '#10b981' : '#64748b';
                     }
@@ -860,7 +925,7 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap text-blue-700"
               >
                 <div className="flex items-center justify-end gap-1">
-                  客平均差枚
+                  {perspective === 'hall' ? 'ホール平均差枚' : '客平均差枚'}
                   {sortField === 'avgDiffCoins' && (sortOrder === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />)}
                 </div>
               </th>
@@ -869,12 +934,12 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                 className="py-3 px-3 text-right cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap text-indigo-700"
               >
                 <div className="flex items-center justify-end gap-1">
-                  {perspective === 'hall' ? '1日平均粗利' : '1日平均収支'}
+                  {perspective === 'hall' ? '1日平均粗利' : '1日平均客収支'}
                   {sortField === 'hallYen' && (sortOrder === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />)}
                 </div>
               </th>
               <th className="py-3 px-3 text-right whitespace-nowrap">
-                {perspective === 'hall' ? '期間累計粗利' : '期間累計収支'}
+                {perspective === 'hall' ? '期間累計粗利' : '期間累計客収支'}
               </th>
               <th
                 onClick={() => handleSort('avgGames')}
@@ -984,24 +1049,26 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                     {/* Avg Diff Coins */}
                     <td
                       className={`py-3 px-3 text-right font-bold whitespace-nowrap ${
-                        d.avgDiffCoins > 0 ? 'text-blue-600' : 'text-slate-700'
+                        d.displayDiffCoins > 0
+                          ? perspective === 'hall' ? 'text-indigo-600' : 'text-blue-600'
+                          : 'text-slate-700'
                       }`}
                     >
-                      {d.count > 0 ? (d.avgDiffCoins > 0 ? `+${d.avgDiffCoins}` : d.avgDiffCoins) : '-'} 枚/台
+                      {d.count > 0 ? (d.displayDiffCoins > 0 ? `+${d.displayDiffCoins}` : d.displayDiffCoins) : '-'} 枚/台
                     </td>
 
                     {/* Daily Hall / Player Profit */}
                     <td
                       className={`py-3 px-3 text-right font-extrabold whitespace-nowrap ${
-                        (perspective === 'hall' ? d.dailyHallProfit : d.dailyPlayerProfit) >= 0
+                        d.displayDailyProfit >= 0
                           ? perspective === 'hall' ? 'text-indigo-600' : 'text-blue-600'
                           : 'text-rose-600'
                       }`}
                     >
-                      <div>{d.count > 0 ? formatYen(perspective === 'hall' ? d.dailyHallProfit : d.dailyPlayerProfit) : '-'}</div>
+                      <div>{d.count > 0 ? formatYen(d.displayDailyProfit) : '-'}</div>
                       {d.count > 0 && (
                         <div className="text-[10px] text-slate-500 font-normal">
-                          {formatYen(perspective === 'hall' ? d.perMachineDailyProfit : d.perMachineDailyPlayerProfit)}/台
+                          {formatYen(d.displayPerMachineDailyProfit)}/台
                         </div>
                       )}
                     </td>
@@ -1009,13 +1076,15 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                     {/* Total Hall / Player Profit */}
                     <td
                       className={`py-3 px-3 text-right font-semibold whitespace-nowrap ${
-                        (perspective === 'hall' ? d.totalHallProfit : d.totalPlayerProfit) >= 0 ? 'text-slate-800' : 'text-rose-600'
+                        d.displayTotalProfit >= 0
+                          ? perspective === 'hall' ? 'text-slate-800' : 'text-blue-700'
+                          : 'text-rose-600'
                       }`}
                     >
-                      <div>{d.count > 0 ? formatYen(perspective === 'hall' ? d.totalHallProfit : d.totalPlayerProfit) : '-'}</div>
+                      <div>{d.count > 0 ? formatYen(d.displayTotalProfit) : '-'}</div>
                       {d.count > 0 && (
                         <div className="text-[10px] text-slate-400 font-normal">
-                          {formatYen(perspective === 'hall' ? d.perMachineTotalProfit : d.perMachineTotalPlayerProfit)}/台
+                          {formatYen(d.displayPerMachineTotalProfit)}/台
                         </div>
                       )}
                     </td>
@@ -1085,11 +1154,15 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                                 <tr>
                                   <th className="py-2 px-3">日付</th>
                                   <th className="py-2 px-3">区分</th>
-                                  <th className="py-2 px-3 text-right">客平均差枚</th>
+                                  <th className="py-2 px-3 text-right">
+                                    {perspective === 'hall' ? 'ホール平均差枚' : '客平均差枚'}
+                                  </th>
                                   <th className="py-2 px-3 text-right">
                                     {perspective === 'hall' ? 'ホール粗利(G数連動)' : '客側収支(推計)'}
                                   </th>
-                                  <th className="py-2 px-3 text-right">総差枚</th>
+                                  <th className="py-2 px-3 text-right">
+                                    {perspective === 'hall' ? 'ホール総差枚' : '客側総差枚'}
+                                  </th>
                                   <th className="py-2 px-3 text-right">平均稼働G数</th>
                                   <th className="py-2 px-3 text-right">出玉率</th>
                                   <th className="py-2 px-3 text-right">勝率</th>
@@ -1131,10 +1204,12 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                                       </td>
                                       <td
                                         className={`py-2 px-3 text-right font-bold whitespace-nowrap ${
-                                          r.avgDiffCoins > 0 ? 'text-blue-600' : 'text-slate-700'
+                                          (perspective === 'hall' ? -r.avgDiffCoins : r.avgDiffCoins) > 0
+                                            ? perspective === 'hall' ? 'text-indigo-600' : 'text-blue-600'
+                                            : 'text-rose-600'
                                         }`}
                                       >
-                                        {r.avgDiffCoins > 0 ? `+${r.avgDiffCoins}` : r.avgDiffCoins}枚
+                                        {(perspective === 'hall' ? -r.avgDiffCoins : r.avgDiffCoins) > 0 ? `+${perspective === 'hall' ? -r.avgDiffCoins : r.avgDiffCoins}` : (perspective === 'hall' ? -r.avgDiffCoins : r.avgDiffCoins)}枚
                                       </td>
                                       <td
                                         className={`py-2 px-3 text-right font-extrabold whitespace-nowrap ${
@@ -1149,7 +1224,7 @@ export const DayOfWeekAnalysis: React.FC<DayOfWeekAnalysisProps> = ({
                                         </div>
                                       </td>
                                       <td className="py-2 px-3 text-right text-slate-600 whitespace-nowrap">
-                                        {formatCoins(r.totalDiffCoins)}
+                                        {formatCoins(perspective === 'hall' ? -r.totalDiffCoins : r.totalDiffCoins)}
                                       </td>
                                       <td className="py-2 px-3 text-right text-slate-700 whitespace-nowrap">
                                         {formatNumber(r.avgGames)}G
