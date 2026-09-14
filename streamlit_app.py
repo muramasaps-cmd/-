@@ -425,88 +425,47 @@ def calculate_financials(
 with st.sidebar:
     st.header("🎰 スロット分析設定")
 
-    # データソース選択
-    data_source = st.radio(
-        "📁 データソース",
-        ["プリセット (プラザ515)", "スロレポHTMLアップロード", "HTMLテキスト直接貼付", "CSVアップロード"],
-        index=0
+    # データソース: スロレポHTMLアップロードのみ
+    st.subheader("📂 スロレポHTMLファイル")
+    uploaded_files = st.file_uploader(
+        "スロレポHTMLファイルを選択 / ドロップ",
+        type=["html", "htm"],
+        accept_multiple_files=True,
+        help="スロレポの店舗別HTMLファイル（複数可）をドラッグ＆ドロップしてください"
     )
+
+    use_sample = False
+    if not uploaded_files:
+        st.info("💡 スロレポのHTMLファイル（.html）を上にドロップしてください")
+        use_sample = st.checkbox("サンプルデータ（プラザ515）で試す", value=True)
 
     raw_store_data = None
 
-    if data_source == "プリセット (プラザ515)":
+    if uploaded_files:
+        combined_records = []
+        store_meta = None
+        for f in uploaded_files:
+            content = f.read().decode("utf-8", errors="ignore")
+            parsed = parse_slorepo_html(content)
+            if not store_meta:
+                store_meta = parsed
+            combined_records.extend(parsed["raw_records"])
+        
+        # 日付の重複除去
+        seen_dates = set()
+        unique_records = []
+        for r in combined_records:
+            if r["date"] not in seen_dates:
+                seen_dates.add(r["date"])
+                unique_records.append(r)
+        
+        if store_meta:
+            store_meta["raw_records"] = unique_records
+            raw_store_data = store_meta
+            st.success(f"✅ {len(uploaded_files)}ファイルから{len(unique_records)}営業日分のデータを読込完了")
+    elif use_sample:
         raw_store_data = parse_slorepo_html(SAMPLE_PLAZA_515_HTML)
-        st.success("✅ プラザ515サンプルデータを読み込み中")
-
-    elif data_source == "スロレポHTMLアップロード":
-        uploaded_files = st.file_uploader(
-            "スロレポHTMLファイルを選択",
-            type=["html", "htm"],
-            accept_multiple_files=True
-        )
-        if uploaded_files:
-            combined_records = []
-            store_meta = None
-            for f in uploaded_files:
-                content = f.read().decode("utf-8", errors="ignore")
-                parsed = parse_slorepo_html(content)
-                if not store_meta:
-                    store_meta = parsed
-                combined_records.extend(parsed["raw_records"])
-            
-            # 日付の重複除去
-            seen_dates = set()
-            unique_records = []
-            for r in combined_records:
-                if r["date"] not in seen_dates:
-                    seen_dates.add(r["date"])
-                    unique_records.append(r)
-            
-            if store_meta:
-                store_meta["raw_records"] = unique_records
-                raw_store_data = store_meta
-                st.success(f"✅ {len(uploaded_files)}ファイルから{len(unique_records)}営業日分のデータを読込完了")
-        else:
-            st.info("HTMLファイルをドラッグ＆ドロップしてください")
-
-    elif data_source == "HTMLテキスト直接貼付":
-        pasted = st.text_area("スロレポページのHTMLソースを貼付", height=150)
-        if pasted.strip():
-            raw_store_data = parse_slorepo_html(pasted)
-            st.success(f"✅ {len(raw_store_data['raw_records'])}営業日分のデータを抽出")
-
-    elif data_source == "CSVアップロード":
-        csv_file = st.file_uploader("集計CSVを選択", type=["csv"])
-        if csv_file:
-            df_csv = pd.read_csv(csv_file)
-            st.dataframe(df_csv.head(3))
-            # 簡易変換
-            records = []
-            for _, row in df_csv.iterrows():
-                d_str = str(row.get("date") or row.get("日付"))
-                diff = int(row.get("avg_diff") or row.get("平均差枚") or 0)
-                games = int(row.get("avg_games") or row.get("平均G数") or 0)
-                machines = int(row.get("total_machines") or row.get("台数") or 162)
-                records.append({
-                    "date": d_str,
-                    "avg_diff": diff,
-                    "avg_games": games,
-                    "win_rate": float(row.get("win_rate") or 30),
-                    "win_machines": int(machines * 0.3),
-                    "total_machines": machines,
-                    "top_models": str(row.get("top_models") or "")
-                })
-            raw_store_data = {
-                "name": "アップロードCSV店舗",
-                "address": "CSV指定",
-                "old_event_days": "5のつく日",
-                "exchange_rate_str": "50枚貸/56枚交換",
-                "rate_lend": 50,
-                "rate_exchange": 56,
-                "grand_open": "",
-                "mode_machines": 162,
-                "raw_records": records
-            }
+        st.caption("ℹ️ プラザ515のサンプルデータを表示中")
 
     st.markdown("---")
 
@@ -602,7 +561,9 @@ avg_diff_coins = df_daily["avg_diff"].mean()
 
 total_revenue = df_daily["estimated_revenue"].sum()
 total_gap_profit = df_daily["exchange_gap_profit"].sum()
-avg_payout_rate = (df_daily["out_coins"].sum() / df_daily["in_coins"].sum().replace(0, 1) * 100) if df_daily["in_coins"].sum() > 0 else 100.0
+sum_in = float(df_daily["in_coins"].sum())
+sum_out = float(df_daily["out_coins"].sum())
+avg_payout_rate = (sum_out / sum_in * 100) if sum_in > 0 else 100.0
 
 hall_wins = (df_daily["hall_coin_profit"] > 0).sum()
 player_wins = (df_daily["player_coin_profit"] > 0).sum()
@@ -937,6 +898,11 @@ with tab_special:
     df_sp = df_daily[df_daily["is_special"]]
     df_no = df_daily[~df_daily["is_special"]]
 
+    sp_in = float(df_sp["in_coins"].sum())
+    sp_out = float(df_sp["out_coins"].sum())
+    no_in = float(df_no["in_coins"].sum())
+    no_out = float(df_no["out_coins"].sum())
+
     comp_data = [
         {
             "区分": "特定日 (旧イベント日等)",
@@ -945,7 +911,7 @@ with tab_special:
             "平均G数": round(df_sp["avg_games"].mean()) if not df_sp.empty else 0,
             "勝率": round(df_sp["win_rate"].mean(), 1) if not df_sp.empty else 0,
             "1日平均粗利" if is_hall else "1日平均収支": round(df_sp[display_val_col].mean()) if not df_sp.empty else 0,
-            "出玉率 (機械割)": round((df_sp["out_coins"].sum() / df_sp["in_coins"].sum().replace(0, 1)) * 100, 2) if not df_sp.empty else 0
+            "出玉率 (機械割)": round((sp_out / sp_in * 100), 2) if sp_in > 0 else 0
         },
         {
             "区分": "通常営業日",
@@ -954,7 +920,7 @@ with tab_special:
             "平均G数": round(df_no["avg_games"].mean()) if not df_no.empty else 0,
             "勝率": round(df_no["win_rate"].mean(), 1) if not df_no.empty else 0,
             "1日平均粗利" if is_hall else "1日平均収支": round(df_no[display_val_col].mean()) if not df_no.empty else 0,
-            "出玉率 (機械割)": round((df_no["out_coins"].sum() / df_no["in_coins"].sum().replace(0, 1)) * 100, 2) if not df_no.empty else 0
+            "出玉率 (機械割)": round((no_out / no_in * 100), 2) if no_in > 0 else 0
         }
     ]
     df_comp = pd.DataFrame(comp_data)
