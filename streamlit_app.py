@@ -2,7 +2,7 @@
 スロット店舗 粗利・売上分析システム (Streamlit版)
 ======================================================
 スロレポHTMLデータから、ホールの粗利推移・売上・出玉率（機械割）・特日/曜日/末尾別傾向を
-高度に可視化・分析するStreamlitアプリケーションです。
+Web版ダッシュボードと100%同一のパース＆計算ロジックで忠実に可視化・分析します。
 
 【実行方法】
 1. 必要なライブラリをインストール:
@@ -15,13 +15,13 @@
 import re
 import math
 import datetime
-from typing import Dict, List, Optional, Tuple, Any
-import html
+from typing import Dict, List, Optional, Tuple, Any, Set
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from bs4 import BeautifulSoup
 
 # --------------------------------------------------------------------------
 # ページ基本設定
@@ -34,7 +34,7 @@ st.set_page_config(
 )
 
 # --------------------------------------------------------------------------
-# 洗練されたUIカスタムスタイル (React版デザインを忠実に再現)
+# UIカスタムスタイル (Web版ダッシュボードデザイン再現)
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -44,18 +44,15 @@ st.markdown("""
         font-family: 'Plus Jakarta Sans', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
-    /* 背景色を上品なスレートグレーに */
     .stApp {
         background-color: #f8fafc;
     }
     
-    /* サイドバー */
     [data-testid="stSidebar"] {
         background-color: #ffffff;
         border-right: 1px solid #e2e8f0;
     }
     
-    /* ヘッダーカード */
     .hero-card {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         color: #ffffff;
@@ -90,7 +87,6 @@ st.markdown("""
         border: 1px solid rgba(255, 255, 255, 0.18);
     }
 
-    /* KPIカードコンテナ */
     .kpi-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -130,7 +126,6 @@ st.markdown("""
         color: #94a3b8;
     }
 
-    /* タブデザインの刷新 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px;
         background-color: #f1f5f9;
@@ -154,262 +149,331 @@ st.markdown("""
         box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important;
     }
 
-    /* ボタンスタイル */
-    .stButton > button {
-        border-radius: 10px;
-        font-weight: 600;
-        transition: all 0.2s;
+    .welcome-box {
+        background: #ffffff;
+        border: 2px dashed #cbd5e1;
+        border-radius: 16px;
+        padding: 48px 32px;
+        text-align: center;
+        margin: 32px auto;
+        max-width: 680px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --------------------------------------------------------------------------
-# サンプルデータ (プラザ515)
-# --------------------------------------------------------------------------
-SAMPLE_PLAZA_515_HTML = """<!DOCTYPE html>
-<html lang="ja">
-  <head>
-  <meta charset="utf-8">
-  <title>プラザ５１５ - スロレポ</title>
-  </head>
-  <body>
-  <h4 class="title" align="center"><strong>プラザ５１５</strong></h4>
-  <figure class="wp-block-table aligncenter"><table><tbody>
-  <tr><th>住所</th><td>東京都大田区池上6-2-3</td></tr>
-  <tr><th>旧イベント日</th><td>5のつく日</td></tr>
-  <tr><th>換金率</th><td>50枚貸/56枚交換</td></tr>
-  <tr><th>グランドオープン日</th><td>2021年1月25日</td></tr>
-  </tbody></table></figure>
-
-  <table class="date" style="min-width: 600px;"><tbody>
-  <tr align="center"><th>日付</th><th>平均差枚</th><th>平均G数</th><th>勝率</th><th>優秀機種・末尾</th></tr>
-  <tr><td><a href="20260909">9/9(水)</a></td><td align="right"><strong><font color="red">-57</font></strong></td><td align="right">1,299</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260908">9/8(火)</a></td><td align="right"><strong><font color="blue">+61</font></strong></td><td align="right">1,754</td><td align="right">33%<br>(53/162)</td><td></td></tr>
-  <tr><td><a href="20260907">9/7(月)</a></td><td align="right"><strong><font color="blue">+5</font></strong></td><td align="right">1,317</td><td align="right">28%<br>(46/162)</td><td></td></tr>
-  <tr><td><a href="20260906">9/6(日)</a></td><td align="right"><strong><font color="red">-173</font></strong></td><td align="right">1,634</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260905">9/5(土)</a></td><td align="right"><strong><font color="blue">+134</font></strong></td><td align="right">3,261</td><td align="right">44%<br>(72/162)</td><td>L戦国乙女5</td></tr>
-  <tr><td><a href="20260904">9/4(金)</a></td><td align="right"><strong><font color="blue">+41</font></strong></td><td align="right">1,220</td><td align="right">30%<br>(49/162)</td><td></td></tr>
-  <tr><td><a href="20260903">9/3(木)</a></td><td align="right"><strong><font color="red">-135</font></strong></td><td align="right">1,449</td><td align="right">30%<br>(49/162)</td><td></td></tr>
-  <tr><td><a href="20260902">9/2(水)</a></td><td align="right"><strong><font color="red">-33</font></strong></td><td align="right">1,362</td><td align="right">28%<br>(46/162)</td><td></td></tr>
-  <tr><td><a href="20260901">9/1(火)</a></td><td align="right"><strong><font color="blue">+172</font></strong></td><td align="right">1,519</td><td align="right">36%<br>(58/162)</td><td>スロット ソードアート・オンラインⅡ</td></tr>
-  <tr><td><a href="20260831">8/31(月)</a></td><td align="right"><strong><font color="red">-128</font></strong></td><td align="right">1,298</td><td align="right">30%<br>(49/162)</td><td></td></tr>
-  <tr><td><a href="20260830">8/30(日)</a></td><td align="right"><strong><font color="red">-109</font></strong></td><td align="right">2,178</td><td align="right">33%<br>(53/162)</td><td></td></tr>
-  <tr><td><a href="20260829">8/29(土)</a></td><td align="right"><strong><font color="red">-92</font></strong></td><td align="right">2,283</td><td align="right">37%<br>(60/162)</td><td></td></tr>
-  <tr><td><a href="20260828">8/28(金)</a></td><td align="right"><strong><font color="red">-53</font></strong></td><td align="right">1,630</td><td align="right">26%<br>(42/162)</td><td></td></tr>
-  <tr><td><a href="20260827">8/27(木)</a></td><td align="right"><strong><font color="red">-76</font></strong></td><td align="right">1,446</td><td align="right">27%<br>(44/162)</td><td></td></tr>
-  <tr><td><a href="20260826">8/26(水)</a></td><td align="right"><strong><font color="red">-109</font></strong></td><td align="right">1,383</td><td align="right">28%<br>(46/162)</td><td></td></tr>
-  <tr><td><a href="20260825">8/25(火)</a></td><td align="right"><strong><font color="blue">+11</font></strong></td><td align="right">2,440</td><td align="right">42%<br>(68/162)</td><td></td></tr>
-  <tr><td><a href="20260824">8/24(月)</a></td><td align="right"><strong><font color="blue">+113</font></strong></td><td align="right">1,523</td><td align="right">35%<br>(56/162)</td><td></td></tr>
-  <tr><td><a href="20260823">8/23(日)</a></td><td align="right"><strong><font color="red">-188</font></strong></td><td align="right">2,195</td><td align="right">31%<br>(50/162)</td><td></td></tr>
-  <tr><td><a href="20260822">8/22(土)</a></td><td align="right"><strong><font color="red">-124</font></strong></td><td align="right">1,993</td><td align="right">33%<br>(54/162)</td><td></td></tr>
-  <tr><td><a href="20260821">8/21(金)</a></td><td align="right"><strong><font color="red">-21</font></strong></td><td align="right">1,386</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260820">8/20(木)</a></td><td align="right"><strong><font color="red">-148</font></strong></td><td align="right">1,438</td><td align="right">28%<br>(46/162)</td><td></td></tr>
-  <tr><td><a href="20260819">8/19(水)</a></td><td align="right"><strong><font color="red">-153</font></strong></td><td align="right">1,418</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260818">8/18(火)</a></td><td align="right"><strong><font color="red">-108</font></strong></td><td align="right">1,460</td><td align="right">29%<br>(47/162)</td><td></td></tr>
-  <tr><td><a href="20260817">8/17(月)</a></td><td align="right"><strong><font color="red">-107</font></strong></td><td align="right">1,357</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260816">8/16(日)</a></td><td align="right"><strong><font color="red">-134</font></strong></td><td align="right">2,159</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260815">8/15(土)</a></td><td align="right"><strong><font color="blue">+121</font></strong></td><td align="right">2,923</td><td align="right">40%<br>(64/162)</td><td></td></tr>
-  <tr><td><a href="20260814">8/14(金)</a></td><td align="right"><strong><font color="red">-18</font></strong></td><td align="right">2,028</td><td align="right">33%<br>(54/162)</td><td></td></tr>
-  <tr><td><a href="20260813">8/13(木)</a></td><td align="right"><strong><font color="red">-119</font></strong></td><td align="right">1,999</td><td align="right">28%<br>(45/162)</td><td></td></tr>
-  <tr><td><a href="20260812">8/12(水)</a></td><td align="right"><strong><font color="red">-94</font></strong></td><td align="right">1,947</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260811">8/11(火)</a></td><td align="right"><strong><font color="red">-160</font></strong></td><td align="right">2,168</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260810">8/10(月)</a></td><td align="right"><strong><font color="red">-134</font></strong></td><td align="right">2,442</td><td align="right">31%<br>(50/162)</td><td></td></tr>
-  <tr><td><a href="20260809">8/9(日)</a></td><td align="right"><strong><font color="red">-124</font></strong></td><td align="right">2,434</td><td align="right">32%<br>(52/162)</td><td></td></tr>
-  <tr><td><a href="20260808">8/8(土)</a></td><td align="right"><strong><font color="red">-169</font></strong></td><td align="right">2,357</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260807">8/7(金)</a></td><td align="right"><strong><font color="red">-121</font></strong></td><td align="right">1,821</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260806">8/6(木)</a></td><td align="right"><strong><font color="red">-71</font></strong></td><td align="right">1,489</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260805">8/5(水)</a></td><td align="right"><strong><font color="blue">+138</font></strong></td><td align="right">2,886</td><td align="right">43%<br>(70/162)</td><td>スマスロ ゲゲゲの鬼太郎 覚醒</td></tr>
-  <tr><td><a href="20260804">8/4(火)</a></td><td align="right"><strong><font color="red">-138</font></strong></td><td align="right">1,617</td><td align="right">31%<br>(50/162)</td><td></td></tr>
-  <tr><td><a href="20260803">8/3(月)</a></td><td align="right"><strong><font color="red">-77</font></strong></td><td align="right">1,509</td><td align="right">35%<br>(56/162)</td><td></td></tr>
-  <tr><td><a href="20260802">8/2(日)</a></td><td align="right"><strong><font color="red">-124</font></strong></td><td align="right">1,960</td><td align="right">33%<br>(53/162)</td><td></td></tr>
-  <tr><td><a href="20260801">8/1(土)</a></td><td align="right"><strong><font color="blue">+80</font></strong></td><td align="right">2,504</td><td align="right">39%<br>(63/162)</td><td></td></tr>
-  <tr><td><a href="20260731">7/31(金)</a></td><td align="right"><strong><font color="red">-65</font></strong></td><td align="right">1,514</td><td align="right">31%<br>(50/162)</td><td></td></tr>
-  <tr><td><a href="20260730">7/30(木)</a></td><td align="right"><strong><font color="red">-68</font></strong></td><td align="right">1,402</td><td align="right">32%<br>(52/162)</td><td></td></tr>
-  <tr><td><a href="20260729">7/29(水)</a></td><td align="right"><strong><font color="red">-78</font></strong></td><td align="right">1,544</td><td align="right">32%<br>(52/162)</td><td></td></tr>
-  <tr><td><a href="20260728">7/28(火)</a></td><td align="right"><strong><font color="red">-119</font></strong></td><td align="right">1,489</td><td align="right">32%<br>(52/162)</td><td></td></tr>
-  <tr><td><a href="20260727">7/27(月)</a></td><td align="right"><strong><font color="red">-153</font></strong></td><td align="right">1,486</td><td align="right">29%<br>(47/162)</td><td></td></tr>
-  <tr><td><a href="20260726">7/26(日)</a></td><td align="right"><strong><font color="red">-124</font></strong></td><td align="right">2,168</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260725">7/25(土)</a></td><td align="right"><strong><font color="blue">+169</font></strong></td><td align="right">2,925</td><td align="right">43%<br>(69/162)</td><td></td></tr>
-  <tr><td><a href="20260724">7/24(金)</a></td><td align="right"><strong><font color="red">-65</font></strong></td><td align="right">1,617</td><td align="right">32%<br>(52/162)</td><td></td></tr>
-  <tr><td><a href="20260723">7/23(木)</a></td><td align="right"><strong><font color="red">-128</font></strong></td><td align="right">1,588</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260722">7/22(水)</a></td><td align="right"><strong><font color="red">-134</font></strong></td><td align="right">1,438</td><td align="right">31%<br>(50/162)</td><td></td></tr>
-  <tr><td><a href="20260721">7/21(火)</a></td><td align="right"><strong><font color="red">-148</font></strong></td><td align="right">1,514</td><td align="right">29%<br>(47/162)</td><td></td></tr>
-  <tr><td><a href="20260720">7/20(月)</a></td><td align="right"><strong><font color="red">-77</font></strong></td><td align="right">1,586</td><td align="right">33%<br>(53/162)</td><td></td></tr>
-  <tr><td><a href="20260719">7/19(日)</a></td><td align="right"><strong><font color="red">-138</font></strong></td><td align="right">2,118</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260718">7/18(土)</a></td><td align="right"><strong><font color="red">-124</font></strong></td><td align="right">2,028</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260717">7/17(金)</a></td><td align="right"><strong><font color="red">-119</font></strong></td><td align="right">1,617</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260716">7/16(木)</a></td><td align="right"><strong><font color="red">-65</font></strong></td><td align="right">1,418</td><td align="right">32%<br>(52/162)</td><td></td></tr>
-  <tr><td><a href="20260715">7/15(水)</a></td><td align="right"><strong><font color="blue">+138</font></strong></td><td align="right">2,968</td><td align="right">42%<br>(68/162)</td><td>パチスロ 革命機ヴァルヴレイヴ</td></tr>
-  <tr><td><a href="20260714">7/14(火)</a></td><td align="right"><strong><font color="red">-109</font></strong></td><td align="right">1,544</td><td align="right">31%<br>(50/162)</td><td></td></tr>
-  <tr><td><a href="20260713">7/13(月)</a></td><td align="right"><strong><font color="red">-153</font></strong></td><td align="right">1,438</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260712">7/12(日)</a></td><td align="right"><strong><font color="red">-119</font></strong></td><td align="right">2,283</td><td align="right">32%<br>(52/162)</td><td></td></tr>
-  <tr><td><a href="20260711">7/11(土)</a></td><td align="right"><strong><font color="red">-134</font></strong></td><td align="right">2,159</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260710">7/10(金)</a></td><td align="right"><strong><font color="red">-68</font></strong></td><td align="right">1,630</td><td align="right">31%<br>(50/162)</td><td></td></tr>
-  <tr><td><a href="20260709">7/9(木)</a></td><td align="right"><strong><font color="red">-148</font></strong></td><td align="right">1,489</td><td align="right">28%<br>(46/162)</td><td></td></tr>
-  <tr><td><a href="20260708">7/8(水)</a></td><td align="right"><strong><font color="red">-92</font></strong></td><td align="right">1,586</td><td align="right">32%<br>(52/162)</td><td></td></tr>
-  <tr><td><a href="20260707">7/7(火)</a></td><td align="right"><strong><font color="blue">+188</font></strong></td><td align="right">3,540</td><td align="right">47%<br>(76/162)</td><td>スマスロ北斗の拳</td></tr>
-  <tr><td><a href="20260706">7/6(月)</a></td><td align="right"><strong><font color="red">-108</font></strong></td><td align="right">1,486</td><td align="right">31%<br>(51/162)</td><td></td></tr>
-  <tr><td><a href="20260705">7/5(日)</a></td><td align="right"><strong><font color="blue">+172</font></strong></td><td align="right">3,120</td><td align="right">45%<br>(73/162)</td><td>パチスロ からくりサーカス</td></tr>
-  <tr><td><a href="20260704">7/4(土)</a></td><td align="right"><strong><font color="red">-119</font></strong></td><td align="right">2,195</td><td align="right">32%<br>(52/162)</td><td></td></tr>
-  <tr><td><a href="20260703">7/3(金)</a></td><td align="right"><strong><font color="red">-68</font></strong></td><td align="right">1,509</td><td align="right">33%<br>(53/162)</td><td></td></tr>
-  <tr><td><a href="20260702">7/2(木)</a></td><td align="right"><strong><font color="red">-124</font></strong></td><td align="right">1,446</td><td align="right">30%<br>(48/162)</td><td></td></tr>
-  <tr><td><a href="20260701">7/1(水)</a></td><td align="right"><strong><font color="blue">+45</font></strong></td><td align="right">1,821</td><td align="right">35%<br>(57/162)</td><td></td></tr>
-  </tbody></table>
-  </body>
-</html>
-"""
-
 JAPANESE_DAYS = ['月', '火', '水', '木', '金', '土', '日']
 
+
 # --------------------------------------------------------------------------
-# スロレポHTMLパーサー
+# 換金率パース関数 (Web版 htmlParser.ts と完全一致)
+# --------------------------------------------------------------------------
+def parse_rates_from_exchange_rate(exchange_rate_str: str) -> Tuple[int, int]:
+    """換金率文字列から貸出/交換レート（枚/1000円）を抽出"""
+    rate_lend = 46
+    rate_exchange = 52
+
+    if not exchange_rate_str:
+        return rate_lend, rate_exchange
+
+    clean = exchange_rate_str.strip()
+    slash_parts = re.split(r'[/／]', clean)
+
+    if len(slash_parts) >= 2:
+        lend_part = slash_parts[0]
+        exch_part = slash_parts[1]
+
+        lend_digits = re.search(r'(\d+)', lend_part)
+        if lend_digits:
+            rate_lend = int(lend_digits.group(1))
+
+        exch_digits = re.search(r'(\d+)', exch_part)
+        if exch_digits:
+            rate_exchange = int(exch_digits.group(1))
+        elif '等価' in exch_part:
+            rate_exchange = rate_lend
+        return rate_lend, rate_exchange
+
+    lend_match = re.search(r'(\d+)\s*枚(?:貸|貸出)', clean) or re.search(r'(?:貸出|貸)\s*[:：]?\s*(\d+)', clean)
+    if lend_match:
+        rate_lend = int(lend_match.group(1))
+
+    exch_match = re.search(r'(\d+)\s*枚\s*(?:交換|等価)', clean) or re.search(r'(?:交換|換金)\s*[:：]?\s*(\d+)', clean)
+    if exch_match:
+        rate_exchange = int(exch_match.group(1))
+    elif '等価' in clean:
+        rate_exchange = rate_lend
+
+    return rate_lend, rate_exchange
+
+
+# --------------------------------------------------------------------------
+# 特日ルール自動解析 (Web版 specialDayRules.ts と完全一致)
+# --------------------------------------------------------------------------
+def parse_special_day_rules_from_text(raw_text: str) -> Dict[str, Any]:
+    """旧イベント日等の自由記述テキストから特日判定ルールを自動抽出"""
+    if not raw_text or not raw_text.strip():
+        return {"tails": [], "double_digits": False, "month_day_zoro": False, "fixed_dates": [], "days_of_week": []}
+
+    # 全角数字を半角に正規化
+    text = raw_text.translate(str.maketrans('０１２３４５６７８９', '0123456789'))
+
+    tails_set: Set[int] = set()
+
+    # 1. つく日 / 末尾 (例: "5のつく日", "7のつく日", "末尾5")
+    for m in re.finditer(r'([0-9])\s*のつく日', text):
+        tails_set.add(int(m.group(1)))
+    for m in re.finditer(r'末尾\s*([0-9])', text):
+        tails_set.add(int(m.group(1)))
+
+    # 2. ゾロ目 / 11日 / 22日
+    double_digits = ('ゾロ目' in text or '11日' in text or '22日' in text)
+    month_day_zoro = ('ゾロ目' in text)
+
+    # 3. 曜日 (土日, 毎週土曜日など)
+    dows: List[str] = []
+    if '土曜' in text or '土日' in text or '土' in text:
+        dows.append('土')
+    if '日曜' in text or '土日' in text or '日' in text:
+        dows.append('日')
+
+    # 4. 日付指定 (例: "1日・15日", "5日, 15日, 25日")
+    fixed_dates: List[int] = []
+    day_matches = re.findall(r'([0-9]{1,2})\s*日', text)
+    if day_matches and len(day_matches) >= 2:
+        parsed_days = sorted(list({int(d) for d in day_matches if 1 <= int(d) <= 31}))
+        if len(parsed_days) >= 2:
+            first_tail = parsed_days[0] % 10
+            if all(d % 10 == first_tail for d in parsed_days):
+                tails_set.add(first_tail)
+            else:
+                fixed_dates = parsed_days
+    elif day_matches and len(day_matches) == 1 and not tails_set:
+        d = int(day_matches[0])
+        if 1 <= d <= 31:
+            fixed_dates = [d]
+
+    return {
+        "tails": sorted(list(tails_set)),
+        "double_digits": double_digits,
+        "month_day_zoro": month_day_zoro,
+        "fixed_dates": fixed_dates,
+        "days_of_week": dows
+    }
+
+
+# --------------------------------------------------------------------------
+# スロレポHTMLパーサー (Web版 htmlParser.ts と完全同一ロジック)
 # --------------------------------------------------------------------------
 def parse_slorepo_html(html_text: str) -> Dict[str, Any]:
-    """スロレポHTMLから店舗情報および日別レポート行を抽出"""
-    store_name = "スロレポ店舗"
+    """BeautifulSoupを用いてスロレポHTMLを堅牢・正確にパース"""
+    soup = BeautifulSoup(html_text, 'html.parser')
+
+    # 1. 店舗名抽出
+    store_name = ""
+    h4_title = soup.select_one('h4.title')
+    if h4_title:
+        store_name = h4_title.get_text(strip=True)
+    if not store_name and soup.title:
+        title_txt = soup.title.get_text(strip=True)
+        store_name = re.sub(r'\s*[-–|]\s*スロレポ.*$', '', title_txt, flags=re.IGNORECASE).strip()
+    if not store_name:
+        store_name = "スロレポ店舗"
+
+    # 2. メタデータ (住所、旧イベント日、換金率、グランドオープン)
     address = "住所未登録"
     old_event_days = "5のつく日"
     exchange_rate_str = "50枚貸/56枚交換"
     grand_open = ""
 
-    # 1. 店舗名
-    h4_match = re.search(r'<h4[^>]*class=["\'][^"\']*title[^"\']*["\'][^>]*>(.*?)</h4>', html_text, re.IGNORECASE | re.DOTALL)
-    if h4_match:
-        store_name = re.sub(r'<[^>]+>', '', h4_match.group(1)).strip()
-    else:
-        title_match = re.search(r'<title>(.*?)</title>', html_text, re.IGNORECASE)
-        if title_match:
-            raw_title = re.sub(r'\s*[-–|]\s*スロレポ.*$', '', title_match.group(1)).strip()
-            if raw_title:
-                store_name = raw_title
+    info_tables = soup.select('figure.wp-block-table table, table')
+    for tbl in info_tables:
+        for tr in tbl.find_all('tr'):
+            th = tr.find('th')
+            td = tr.find('td')
+            if not th or not td:
+                continue
+            th_text = th.get_text(strip=True)
+            td_text = td.get_text(strip=True)
+            if '住所' in th_text and td_text:
+                address = td_text
+            elif '旧イベント日' in th_text and td_text:
+                old_event_days = td_text
+            elif '換金率' in th_text and td_text:
+                exchange_rate_str = td_text
+            elif 'グランドオープン' in th_text and td_text:
+                grand_open = td_text
 
-    # 2. 住所・旧イベント日・換金率
-    addr_m = re.search(r'<th>\s*住所\s*</th>\s*<td>(.*?)</td>', html_text, re.DOTALL)
-    if addr_m:
-        address = re.sub(r'<[^>]+>', '', addr_m.group(1)).strip()
+    rate_lend, rate_exchange = parse_rates_from_exchange_rate(exchange_rate_str)
+    parsed_rules = parse_special_day_rules_from_text(old_event_days)
 
-    event_m = re.search(r'<th>\s*旧イベント日\s*</th>\s*<td>(.*?)</td>', html_text, re.DOTALL)
-    if event_m:
-        old_event_days = re.sub(r'<[^>]+>', '', event_m.group(1)).strip()
+    # 3. 日別出玉テーブルの特定
+    date_tables = soup.find_all('table', class_='date')
+    all_tables = soup.find_all('table')
+    for tbl in all_tables:
+        if tbl not in date_tables:
+            txt = tbl.get_text()
+            if '日付' in txt and ('差枚' in txt or '勝率' in txt or '平均G' in txt or 'G数' in txt or '優秀機種' in txt):
+                date_tables.append(tbl)
 
-    exch_m = re.search(r'<th>\s*換金率\s*</th>\s*<td>(.*?)</td>', html_text, re.DOTALL)
-    if exch_m:
-        exchange_rate_str = re.sub(r'<[^>]+>', '', exch_m.group(1)).strip()
-
-    go_m = re.search(r'<th>\s*グランドオープン(?:日)?\s*</th>\s*<td>(.*?)</td>', html_text, re.DOTALL)
-    if go_m:
-        grand_open = re.sub(r'<[^>]+>', '', go_m.group(1)).strip()
-
-    # レート数値パース
-    rate_lend, rate_exchange = parse_rates(exchange_rate_str)
-
-    # 3. 日別テーブル抽出
-    rows = []
+    raw_rows = []
     machine_counts = []
     current_year = datetime.date.today().year
     previous_month = None
 
-    # table.date または 各 <tr> の行
-    tr_matches = re.findall(r'<tr[^>]*>(.*?)</tr>', html_text, re.DOTALL | re.IGNORECASE)
-    for tr in tr_matches:
-        if '<th' in tr:
-            continue
-        tds = re.findall(r'<td[^>]*>(.*?)</td>', tr, re.DOTALL | re.IGNORECASE)
-        if len(tds) < 3:
-            continue
+    for tbl in date_tables:
+        # テーブル文脈の年 (caption や 直前要素)
+        context_year = None
+        cap = tbl.find('caption')
+        cap_text = cap.get_text() if cap else ""
+        prev_el = tbl.find_previous_sibling()
+        prev_text = prev_el.get_text() if prev_el else ""
+        ctx_m = re.search(r'(202\d)年', cap_text + " " + prev_text)
+        if ctx_m:
+            context_year = int(ctx_m.group(1))
 
-        # td[0]: 日付
-        d_cell = tds[0]
-        row_year, row_month, row_day = None, None, None
+        for tr in tbl.find_all('tr'):
+            if tr.find('th'):
+                continue
+            tds = tr.find_all('td')
+            if len(tds) < 3:
+                continue
 
-        # href チェック (20260909)
-        href_m = re.search(r'href=["\'][^"\']*(202\d)[-_/]?(\d{2})[-_/]?(\d{2})', d_cell)
-        if href_m:
-            row_year = int(href_m.group(1))
-            row_month = int(href_m.group(2))
-            row_day = int(href_m.group(3))
-        else:
-            # cell テキスト: 2026/09/09 or 9/9(水)
-            clean_d = re.sub(r'<[^>]+>', '', d_cell).strip()
-            full_m = re.search(r'(202\d)[年/-](\d{1,2})[月/-](\d{1,2})', clean_d)
-            if full_m:
-                row_year = int(full_m.group(1))
-                row_month = int(full_m.group(2))
-                row_day = int(full_m.group(3))
+            # Cell 0: 日付
+            date_cell = tds[0]
+            date_link = date_cell.find('a')
+            href = date_link.get('href', '') if date_link else ''
+            cell_text = date_cell.get_text(strip=True)
+
+            formatted_date = ""
+            row_year = None
+            row_month = None
+            row_day = None
+
+            # href チェック
+            href_m = re.search(r'(202\d)[-_/]?(\d{2})[-_/]?(\d{2})', href)
+            if href_m:
+                row_year = int(href_m.group(1))
+                row_month = int(href_m.group(2))
+                row_day = int(href_m.group(3))
             else:
-                md_m = re.search(r'(\d{1,2})[\/月](\d{1,2})', clean_d)
-                if md_m:
-                    row_month = int(md_m.group(1))
-                    row_day = int(md_m.group(2))
+                # full match (2026/09/09 or 2026年9月9日)
+                full_m = re.search(r'(202\d)[年/-](\d{1,2})[月/-](\d{1,2})', cell_text)
+                if full_m:
+                    row_year = int(full_m.group(1))
+                    row_month = int(full_m.group(2))
+                    row_day = int(full_m.group(3))
+                else:
+                    # md match (9/9 or 9月9日)
+                    md_m = re.search(r'(\d{1,2})[\/月](\d{1,2})', cell_text)
+                    if md_m:
+                        row_month = int(md_m.group(1))
+                        row_day = int(md_m.group(2))
 
-        if not row_month or not row_day:
-            continue
+            if row_month and row_day:
+                if row_year:
+                    current_year = row_year
+                    previous_month = row_month
+                else:
+                    if context_year:
+                        current_year = context_year
+                    else:
+                        if previous_month is not None and previous_month <= 2 and row_month >= 11:
+                            current_year -= 1
+                    row_year = current_year
+                    previous_month = row_month
+                formatted_date = f"{row_year:04d}-{row_month:02d}-{row_day:02d}"
 
-        if row_year:
-            current_year = row_year
-            previous_month = row_month
-        else:
-            if previous_month is not None and previous_month <= 2 and row_month >= 11:
-                current_year -= 1
-            row_year = current_year
-            previous_month = row_month
+            if not formatted_date:
+                continue
 
-        date_str = f"{row_year:04d}-{row_month:02d}-{row_day:02d}"
+            # Cell 1: 平均差枚
+            diff_text = tds[1].get_text(strip=True).replace(',', '')
+            diff_m = re.search(r'([+-]?\d+)', diff_text)
+            avg_diff = int(diff_m.group(1)) if diff_m else 0
 
-        # td[1]: 平均差枚 (+61, -57)
-        diff_text = re.sub(r'<[^>]+>', '', tds[1]).replace(',', '').strip()
-        diff_m = re.search(r'([+-]?\d+)', diff_text)
-        avg_diff = int(diff_m.group(1)) if diff_m else 0
+            # Cell 2: 平均G数
+            games_text = tds[2].get_text(strip=True).replace(',', '')
+            games_m = re.search(r'(\d+)', games_text)
+            avg_games = int(games_m.group(1)) if games_m else 0
 
-        # td[2]: 平均G数 (1,299)
-        g_text = re.sub(r'<[^>]+>', '', tds[2]).replace(',', '').strip()
-        g_m = re.search(r'(\d+)', g_text)
-        avg_games = int(g_m.group(1)) if g_m else 0
+            # Cell 3: 勝率 & 台数
+            win_rate = None
+            win_machines = None
+            row_total_machines = None
+            if len(tds) >= 4:
+                rate_cell_text = tds[3].get_text()
+                pct_m = re.search(r'(\d+(?:\.\d+)?)\s*%', rate_cell_text)
+                if pct_m:
+                    win_rate = float(pct_m.group(1))
 
-        # td[3]: 勝率 (30% (48/162))
-        win_rate = None
-        win_machines = None
-        total_machines = None
-        if len(tds) >= 4:
-            rate_text = re.sub(r'<[^>]+>', ' ', tds[3])
-            pct_m = re.search(r'(\d+(?:\.\d+)?)\s*%', rate_text)
-            if pct_m:
-                win_rate = float(pct_m.group(1))
-            mach_m = re.search(r'[\(（]?\s*(\d+)\s*[\/／]\s*(\d+)\s*(?:台)?[\)）]?', rate_text)
-            if mach_m:
-                win_machines = int(mach_m.group(1))
-                total_machines = int(mach_m.group(2))
-                machine_counts.append(total_machines)
+                mach_m = re.search(r'[\(（]?\s*(\d+)\s*[\/／]\s*(\d+)\s*(?:台)?[\)）]?', rate_cell_text)
+                if mach_m:
+                    win_machines = int(mach_m.group(1))
+                    row_total_machines = int(mach_m.group(2))
+                    machine_counts.append(row_total_machines)
+                else:
+                    total_only_m = re.search(r'(?:[\/／]|\(|\b)(\d{2,4})\s*台', rate_cell_text)
+                    if total_only_m:
+                        row_total_machines = int(total_only_m.group(1))
+                        machine_counts.append(row_total_machines)
 
-        # td[4]: 優秀機種
-        top_models = ""
-        if len(tds) >= 5:
-            top_models = re.sub(r'<[^>]+>', '', tds[4]).strip()
+            # Cell 4: 優秀機種
+            top_models = ""
+            if len(tds) >= 5:
+                top_models = re.sub(r'\s+', ' ', tds[4].get_text(strip=True))
 
-        rows.append({
-            "date": date_str,
-            "year": row_year,
-            "month": row_month,
-            "day": row_day,
-            "avg_diff": avg_diff,
-            "avg_games": avg_games,
-            "win_rate": win_rate,
-            "win_machines": win_machines,
-            "total_machines": total_machines,
-            "top_models": top_models
-        })
+            raw_rows.append({
+                "date": formatted_date,
+                "avg_diff": avg_diff,
+                "avg_games": avg_games,
+                "win_rate": win_rate,
+                "win_machines": win_machines,
+                "row_total_machines": row_total_machines,
+                "top_models": top_models
+            })
 
-    # 最頻台数で補完
-    mode_machines = 162
+    # 最頻台数の計算
+    approx_machines = 162
     if machine_counts:
-        s = pd.Series(machine_counts)
-        mode_machines = int(s.mode().iloc[0])
+        freq_map = {}
+        for c in machine_counts:
+            freq_map[c] = freq_map.get(c, 0) + 1
+        approx_machines = max(freq_map, key=freq_map.get)
 
-    for r in rows:
-        if not r["total_machines"] or r["total_machines"] <= 0:
-            r["total_machines"] = mode_machines
-        if r["win_rate"] is not None and (r["win_machines"] is None or r["win_machines"] <= 0):
-            r["win_machines"] = round(r["total_machines"] * (r["win_rate"] / 100))
+    # 日付重複除去 (最新の完全なものを優先)
+    date_map = {}
+    for r in raw_rows:
+        d = r["date"]
+        if d not in date_map or (r["row_total_machines"] and not date_map[d].get("row_total_machines")):
+            date_map[d] = r
+
+    # 昇順ソート
+    sorted_rows = sorted(list(date_map.values()), key=lambda x: x["date"])
+
+    # 台数補完 (Web版 htmlParser.ts / dataEngine.ts と完全一致: 直近最寄り日の台数を流用)
+    for i, r in enumerate(sorted_rows):
+        m = r["row_total_machines"]
+        if not m or m <= 0:
+            nearest_dist = float('inf')
+            nearest_m = None
+            for j, other in enumerate(sorted_rows):
+                om = other.get("row_total_machines")
+                if om and om > 0:
+                    dist = abs(i - j)
+                    if dist < nearest_dist:
+                        nearest_dist = dist
+                        nearest_m = om
+            m = nearest_m or approx_machines or 162
+
+        r["total_machines"] = m
+
+        # 勝台数と勝率の相互補完
+        w_m = r["win_machines"]
+        w_r = r["win_rate"]
+        if w_m is None and w_r is not None and m > 0:
+            r["win_machines"] = round(m * (w_r / 100.0))
+        elif w_r is None and w_m is not None and m > 0:
+            r["win_rate"] = round((w_m / m) * 1000.0) / 10.0
 
     return {
         "name": store_name,
@@ -419,40 +483,14 @@ def parse_slorepo_html(html_text: str) -> Dict[str, Any]:
         "rate_lend": rate_lend,
         "rate_exchange": rate_exchange,
         "grand_open": grand_open,
-        "mode_machines": mode_machines,
-        "raw_records": rows,
+        "mode_machines": approx_machines,
+        "parsed_rules": parsed_rules,
+        "raw_records": sorted_rows,
     }
 
 
-def parse_rates(exch_str: str) -> Tuple[int, int]:
-    """換金率文字列から貸出/交換レートを抽出"""
-    lend, exch = 50, 56
-    clean = exch_str.strip()
-    if "/" in clean or "／" in clean:
-        parts = re.split(r'[\/／]', clean)
-        m_lend = re.search(r'(\d+)', parts[0])
-        if m_lend:
-            lend = int(m_lend.group(1))
-        if len(parts) > 1:
-            m_exch = re.search(r'(\d+)', parts[1])
-            if m_exch:
-                exch = int(m_exch.group(1))
-            elif "等価" in parts[1]:
-                exch = lend
-    else:
-        m_lend = re.search(r'(\d+)\s*枚(?:貸|貸出)', clean)
-        if m_lend:
-            lend = int(m_lend.group(1))
-        m_exch = re.search(r'(\d+)\s*枚\s*(?:交換|等価)', clean)
-        if m_exch:
-            exch = int(m_exch.group(1))
-        elif "等価" in clean:
-            exch = lend
-    return lend, exch
-
-
 # --------------------------------------------------------------------------
-# 特日判定ロジック
+# 特日判定 (Web版 dataEngine.ts と完全一致)
 # --------------------------------------------------------------------------
 def is_special_day(
     d: datetime.date,
@@ -462,31 +500,30 @@ def is_special_day(
     fixed_dates: List[int],
     target_dows: List[str]
 ) -> bool:
-    day = d.day
-    # 末尾
-    if (day % 10) in tails:
+    # 1. 末尾
+    if tails and (d.day % 10 in tails):
         return True
-    # ゾロ目
-    if double_digits and (day == 11 or day == 22):
-        return True
-    # 月日ゾロ目
+    # 2. 月日ゾロ目
     if month_day_zoro and (d.month == d.day):
         return True
-    # 特定日
-    if day in fixed_dates:
+    # 3. 11日・22日
+    if double_digits and (d.day == 11 or d.day == 22):
         return True
-    # 曜日
+    # 4. 固定日
+    if fixed_dates and (d.day in fixed_dates):
+        return True
+    # 5. 曜日
     dow_jp = JAPANESE_DAYS[d.weekday()]
-    if dow_jp in target_dows:
+    if target_dows and (dow_jp in target_dows):
         return True
     return False
 
 
 # --------------------------------------------------------------------------
-# メイン計算エンジン (Model A / Model B)
+# 収支・粗利計算 (Web版 dataEngine.ts と完全同一ロジック)
 # --------------------------------------------------------------------------
 def calculate_financials(
-    df_raw: pd.DataFrame,
+    records: List[Dict[str, Any]],
     rate_lend: int,
     rate_exchange: int,
     cash_ratio: float,
@@ -497,10 +534,10 @@ def calculate_financials(
     target_dows: List[str],
 ) -> pd.DataFrame:
     """日別レコードに対して Model A / Model B の収支・粗利を計算"""
-    if df_raw.empty:
-        return df_raw
+    if not records:
+        return pd.DataFrame()
 
-    df = df_raw.copy()
+    df = pd.DataFrame(records)
     df["date_dt"] = pd.to_datetime(df["date"])
     df = df.sort_values("date_dt").reset_index(drop=True)
 
@@ -508,7 +545,7 @@ def calculate_financials(
     exch_yen_per_coin = 1000.0 / rate_exchange
     gap_per_coin = lend_yen_per_coin - exch_yen_per_coin
 
-    # 曜日
+    # 曜日・年月
     df["dow_jp"] = df["date_dt"].apply(lambda d: JAPANESE_DAYS[d.weekday()])
     df["year_month"] = df["date_dt"].dt.strftime("%Y-%m")
 
@@ -517,13 +554,12 @@ def calculate_financials(
         lambda d: is_special_day(d.date(), tails, double_digits, month_day_zoro, fixed_dates, target_dows)
     )
 
-    # 差枚数合計
+    # 総差枚数
     df["total_diff_coins"] = df["avg_diff"] * df["total_machines"]
     df["hall_coin_profit"] = -df["total_diff_coins"]
     df["player_coin_profit"] = df["total_diff_coins"]
 
     # Model A: 単純差枚換算
-    # ホール粗利: プラスなら貸出単価、マイナスなら交換単価
     df["model_a_hall_yen"] = df["hall_coin_profit"].apply(
         lambda c: round(c * lend_yen_per_coin) if c >= 0 else round(c * exch_yen_per_coin)
     )
@@ -534,7 +570,10 @@ def calculate_financials(
     # Model B: G数(IN枚数)・換金ギャップモデル
     df["in_coins"] = (df["avg_games"] * 3 * df["total_machines"]).round()
     df["out_coins"] = df["in_coins"] + df["total_diff_coins"]
-    df["payout_rate"] = (df["out_coins"] / df["in_coins"].replace(0, 1) * 100).round(2)
+    df["payout_rate"] = df.apply(
+        lambda row: round((row["out_coins"] / row["in_coins"] * 100), 2) if row["in_coins"] > 0 else 100.0,
+        axis=1
+    )
 
     df["cash_coins_invested"] = df["in_coins"] * (cash_ratio / 100.0)
     df["estimated_revenue"] = (df["cash_coins_invested"] * lend_yen_per_coin).round()
@@ -550,24 +589,18 @@ def calculate_financials(
 
 
 # --------------------------------------------------------------------------
-# サイドバー: 設定 & データソース
+# サイドバー設定
 # --------------------------------------------------------------------------
 with st.sidebar:
     st.header("🎰 スロット分析設定")
 
-    # データソース: スロレポHTMLアップロードのみ
     st.subheader("📂 スロレポHTMLファイル")
     uploaded_files = st.file_uploader(
         "スロレポHTMLファイルを選択 / ドロップ",
         type=["html", "htm"],
         accept_multiple_files=True,
-        help="スロレポの店舗別HTMLファイル（複数可）をドラッグ＆ドロップしてください"
+        help="スロレポ店舗ページのHTMLファイル（複数ファイル可）をドラッグ＆ドロップしてください"
     )
-
-    use_sample = False
-    if not uploaded_files:
-        st.info("💡 スロレポのHTMLファイル（.html）を上にドロップしてください")
-        use_sample = st.checkbox("サンプルデータ（プラザ515）で試す", value=True)
 
     raw_store_data = None
 
@@ -580,22 +613,20 @@ with st.sidebar:
             if not store_meta:
                 store_meta = parsed
             combined_records.extend(parsed["raw_records"])
-        
-        # 日付の重複除去
-        seen_dates = set()
-        unique_records = []
+
+        # 日付の重複除去 (昇順)
+        date_dict = {}
         for r in combined_records:
-            if r["date"] not in seen_dates:
-                seen_dates.add(r["date"])
-                unique_records.append(r)
-        
+            d = r["date"]
+            if d not in date_dict or (r.get("row_total_machines") and not date_dict[d].get("row_total_machines")):
+                date_dict[d] = r
+
+        unique_records = sorted(list(date_dict.values()), key=lambda x: x["date"])
+
         if store_meta:
             store_meta["raw_records"] = unique_records
             raw_store_data = store_meta
-            st.success(f"✅ {len(uploaded_files)}ファイルから{len(unique_records)}営業日分のデータを読込完了")
-    elif use_sample:
-        raw_store_data = parse_slorepo_html(SAMPLE_PLAZA_515_HTML)
-        st.caption("ℹ️ プラザ515のサンプルデータを表示中")
+            st.success(f"✅ {len(uploaded_files)}ファイルから{len(unique_records):,}営業日分のデータを読込完了")
 
     st.markdown("---")
 
@@ -618,8 +649,8 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("⚙️ レート・前提条件")
 
-    default_lend = raw_store_data["rate_lend"] if raw_store_data else 50
-    default_exch = raw_store_data["rate_exchange"] if raw_store_data else 56
+    default_lend = raw_store_data["rate_lend"] if raw_store_data else 46
+    default_exch = raw_store_data["rate_exchange"] if raw_store_data else 52
 
     col_l, col_e = st.columns(2)
     with col_l:
@@ -632,39 +663,60 @@ with st.sidebar:
 
     st.markdown("---")
     st.subheader("🎯 特日ルール設定")
+
+    # 店舗HTMLから抽出したルールをデフォルト値として自動反映
+    auto_rules = raw_store_data.get("parsed_rules", {}) if raw_store_data else {}
+    init_tails = auto_rules.get("tails", [5])
+    init_double = auto_rules.get("double_digits", False)
+    init_zoro = auto_rules.get("month_day_zoro", False)
+    init_dows = auto_rules.get("days_of_week", [])
+
     selected_tails = st.multiselect(
         "特定末尾 (つく日)",
         options=list(range(10)),
-        default=[5],
+        default=init_tails,
         format_func=lambda x: f"{x}のつく日"
     )
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        double_digits = st.checkbox("11日・22日", value=False)
+        double_digits = st.checkbox("11日・22日", value=init_double)
     with col_t2:
-        month_day_zoro = st.checkbox("月日ゾロ目", value=False)
+        month_day_zoro = st.checkbox("月日ゾロ目", value=init_zoro)
 
-    target_dows = st.multiselect("特定曜日", options=JAPANESE_DAYS, default=[])
+    target_dows = st.multiselect("特定曜日", options=JAPANESE_DAYS, default=init_dows)
 
 
 # --------------------------------------------------------------------------
 # メイン画面処理
 # --------------------------------------------------------------------------
 if not raw_store_data or not raw_store_data.get("raw_records"):
-    st.warning("⚠️ データが読み込まれていません。サイドバーからデータソースを選択してください。")
+    # アップロード待ちウェルカム画面
+    st.markdown("""
+    <div class="welcome-box">
+        <div style="font-size: 48px; margin-bottom: 12px;">📥</div>
+        <h2 style="font-weight: 800; color: #0f172a; margin-bottom: 8px;">スロレポHTMLファイルをアップロードしてください</h2>
+        <p style="color: #64748b; font-size: 15px; margin-bottom: 24px; line-height: 1.6;">
+            左サイドバーの「<strong>スロレポHTMLファイル</strong>」欄に、スロレポの店舗出玉ページ（.html）を<br>
+            ドラッグ＆ドロップしてください。複数月・複数ファイルの一括集計にも完全対応しています。
+        </p>
+        <div style="display: inline-flex; gap: 16px; font-size: 13px; color: #475569; background: #f1f5f9; padding: 10px 18px; border-radius: 8px;">
+            <span>✨ 換金率・旧イベント日を自動検出</span>
+            <span>🪙 1円単位の粗利・売上・出玉率計算</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
 # 計算実行
-df_raw = pd.DataFrame(raw_store_data["raw_records"])
 df_daily = calculate_financials(
-    df_raw=df_raw,
+    records=raw_store_data["raw_records"],
     rate_lend=rate_lend,
     rate_exchange=rate_exchange,
     cash_ratio=cash_ratio,
     tails=selected_tails,
     double_digits=double_digits,
     month_day_zoro=month_day_zoro,
-    fixed_dates=[],
+    fixed_dates=auto_rules.get("fixed_dates", []),
     target_dows=target_dows
 )
 
@@ -674,7 +726,7 @@ active_player_col = "model_b_player_yen" if use_model_b else "model_a_player_yen
 display_val_col = active_profit_col if is_hall else active_player_col
 
 # --------------------------------------------------------------------------
-# ヘッダーカード (モダンWeb風)
+# ヘッダーカード
 # --------------------------------------------------------------------------
 st.markdown(f"""
 <div class="hero-card">
@@ -692,25 +744,32 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------
-# TOP KPI カード (React風モダンカードグリッド)
+# TOP KPI カード (Web版 KpiCards.tsx と100%同一の計算式)
 # --------------------------------------------------------------------------
-total_profit = df_daily[display_val_col].sum()
+total_profit = float(df_daily[display_val_col].sum())
 days_count = len(df_daily)
-daily_avg = total_profit / days_count if days_count > 0 else 0
-avg_machines = df_daily["total_machines"].mean()
-per_machine_daily = daily_avg / avg_machines if avg_machines > 0 else 0
+avg_total_machines = float(df_daily["total_machines"].mean()) if days_count > 0 else 1.0
 
-total_diff_coins = df_daily["total_diff_coins"].sum()
-avg_diff_coins = df_daily["avg_diff"].mean()
+# 営業日平均
+daily_avg = total_profit / days_count if days_count > 0 else 0.0
 
-total_revenue = df_daily["estimated_revenue"].sum()
-total_gap_profit = df_daily["exchange_gap_profit"].sum()
+# 台日あたり (Web版: totalPrimary / (avgTotalMachines * totalDays))
+per_machine_daily = total_profit / (avg_total_machines * days_count) if (avg_total_machines * days_count) > 0 else 0.0
+
+# 差枚数
+total_diff_coins = float(df_daily["total_diff_coins"].sum())
+avg_diff_coins = total_diff_coins / (avg_total_machines * days_count) if (avg_total_machines * days_count) > 0 else 0.0
+
+# 売上・機械割
+total_revenue = float(df_daily["estimated_revenue"].sum())
+total_gap_profit = float(df_daily["exchange_gap_profit"].sum())
 sum_in = float(df_daily["in_coins"].sum())
 sum_out = float(df_daily["out_coins"].sum())
-avg_payout_rate = (sum_out / sum_in * 100) if sum_in > 0 else 100.0
+avg_payout_rate = (sum_out / sum_in * 100.0) if sum_in > 0 else 100.0
 
-hall_wins = (df_daily["hall_coin_profit"] > 0).sum()
-player_wins = (df_daily["player_coin_profit"] > 0).sum()
+# 勝敗カウント
+hall_wins = int((df_daily["hall_coin_profit"] > 0).sum())
+player_wins = int((df_daily["player_coin_profit"] > 0).sum())
 
 label_total = "累計ホール粗利" if is_hall else "累計ユーザー収支"
 label_daily = "1日平均粗利" if is_hall else "1日平均収支"
@@ -759,11 +818,11 @@ st.markdown(f"""
 
 
 # --------------------------------------------------------------------------
-# Model A vs Model B 比較インフォメーション
+# Model B 説明バナー
 # --------------------------------------------------------------------------
 if use_model_b:
     gap_contrib = total_gap_profit
-    model_a_tot = df_daily["model_a_hall_yen" if is_hall else "model_a_player_yen"].sum()
+    model_a_tot = float(df_daily["model_a_hall_yen" if is_hall else "model_a_player_yen"].sum())
     diff_models = total_profit - model_a_tot
     st.info(
         f"💡 **Model B (換金ギャップ連動モデル) 稼働中**: "
@@ -784,33 +843,31 @@ tab_monthly, tab_daily, tab_dow, tab_tail, tab_special, tab_export = st.tabs([
 ])
 
 # --------------------------------------------------------------------------
-# TAB 1: 月別サマリー & 累積推移
+# TAB 1: 月別サマリー
 # --------------------------------------------------------------------------
 with tab_monthly:
     st.subheader("月別集計推移")
 
-    # 月別集計 DataFrame 作成
     monthly_rows = []
     for ym, group in df_daily.groupby("year_month"):
         m_days = len(group)
-        m_profit = group[display_val_col].sum()
+        m_profit = float(group[display_val_col].sum())
         m_daily_avg = m_profit / m_days if m_days > 0 else 0
-        m_diff = group["total_diff_coins"].sum()
-        m_games = group["avg_games"].mean()
-        m_machines = group["total_machines"].mean()
+        m_diff = float(group["total_diff_coins"].sum())
+        m_games = float(group["avg_games"].mean())
+        m_machines = float(group["total_machines"].mean())
         m_per_machine = m_daily_avg / m_machines if m_machines > 0 else 0
 
-        # 特日と通常日
         m_event = group[group["is_special"]]
         m_normal = group[~group["is_special"]]
 
         e_days = len(m_event)
-        e_avg = m_event[display_val_col].sum() / e_days if e_days > 0 else 0
+        e_avg = float(m_event[display_val_col].sum() / e_days) if e_days > 0 else 0
         n_days = len(m_normal)
-        n_avg = m_normal[display_val_col].sum() / n_days if n_days > 0 else 0
+        n_avg = float(m_normal[display_val_col].sum() / n_days) if n_days > 0 else 0
 
-        h_win = (group["hall_coin_profit"] > 0).sum()
-        p_win = (group["player_coin_profit"] > 0).sum()
+        h_win = int((group["hall_coin_profit"] > 0).sum())
+        p_win = int((group["player_coin_profit"] > 0).sum())
 
         monthly_rows.append({
             "year_month": ym,
@@ -830,7 +887,6 @@ with tab_monthly:
 
     df_monthly = pd.DataFrame(monthly_rows).sort_values("year_month", ascending=False)
 
-    # 月別棒グラフ (Plotly)
     fig_monthly = px.bar(
         df_monthly.sort_values("year_month"),
         x="year_month",
@@ -838,18 +894,17 @@ with tab_monthly:
         text_auto=",.0f",
         title="月別ホール粗利推移" if is_hall else "月別ユーザー収支推移",
         color="粗利合計" if is_hall else "収支合計",
-        color_continuous_scale=["#f43f5e", "#cbd5e1", "#4f46e5"] if is_hall else ["#f43f5e", "#cbd5e1", "#10b981"],
+        color_continuous_scale=["#f43f5e", "#cbd5e1", "#059669"] if is_hall else ["#f43f5e", "#cbd5e1", "#2563eb"],
     )
     fig_monthly.update_layout(height=380, margin=dict(l=20, r=20, t=40, b=20))
     st.plotly_chart(fig_monthly, use_container_width=True)
 
-    # 月別テーブル表示
     st.dataframe(
         df_monthly.style.format({
             "粗利合計" if is_hall else "収支合計": "{:+,}円",
             "1日平均": "{:+,}円/日",
-            "全期間平均乖離": "{:+,}円/日",
-            "台日あたり": "{:+,}円/台",
+            "全期間平均乖離": "{:+,}円",
+            "台日あたり": "{:+,}円",
             "総差枚数": "{:+,}枚",
             "平均G数": "{:,}G",
             "特日平均": "{:+,}円",
@@ -859,204 +914,178 @@ with tab_monthly:
         hide_index=True
     )
 
-    # 選択月の日別累積乖離ペース
-    st.markdown("---")
-    st.subheader("📈 月間日別 累積乖離ペース推移")
-    selected_ym = st.selectbox("分析対象月を選択", df_monthly["year_month"].tolist(), index=0)
-    month_data = df_daily[df_daily["year_month"] == selected_ym].sort_values("date_dt").copy()
-
-    if not month_data.empty:
-        # 当月の日割り目標ペース (日当たり平均)
-        m_daily_target = month_data[display_val_col].mean()
-        month_data["daily_diff_from_target"] = month_data[display_val_col] - m_daily_target
-        month_data["cumulative_pace"] = month_data["daily_diff_from_target"].cumsum()
-        month_data["cumulative_profit"] = month_data[display_val_col].cumsum()
-
-        fig_pace = go.Figure()
-        fig_pace.add_trace(go.Scatter(
-            x=month_data["date"],
-            y=month_data["cumulative_pace"],
-            mode="lines+markers+text",
-            name="目標比 累積乖離ペース",
-            line=dict(color="#4f46e5" if is_hall else "#059669", width=3),
-            text=[f"{v/10000:+.1f}万" if abs(v) > 50000 else "" for v in month_data["cumulative_pace"]],
-            textposition="top center"
-        ))
-        fig_pace.add_hline(y=0, line_dash="dash", line_color="gray", annotation_text="目標基準線 (±0)")
-        fig_pace.update_layout(
-            title=f"{selected_ym} 予定ペースに対する回収・放出の波（累積乖離推移）",
-            xaxis_title="日付",
-            yaxis_title="予定比 累積乖離額 (円)",
-            height=360,
-            margin=dict(l=20, r=20, t=40, b=20)
-        )
-        st.plotly_chart(fig_pace, use_container_width=True)
-
-        st.caption(
-            "💡 **累積乖離ペースの見方**: グラフが上方向に伸びている日は「予定平均より回収（店舗黒字）」、"
-            "下方向に潜っている日は「予定平均より放出・還元（ユーザー勝ち）」が進んでいる状態を示します。"
-        )
-
-
 # --------------------------------------------------------------------------
 # TAB 2: 日別詳細データ
 # --------------------------------------------------------------------------
 with tab_daily:
-    st.subheader("📋 日別営業データ一覧")
+    st.subheader("日別営業データ一覧")
 
-    # フィルター
-    f_col1, f_col2, f_col3 = st.columns(3)
-    with f_col1:
-        f_special = st.selectbox("営業区分", ["すべて", "特日のみ", "通常日のみ"])
-    with f_col2:
-        f_dow = st.multiselect("曜日フィルター", options=JAPANESE_DAYS, default=[])
-    with f_col3:
-        f_win = st.selectbox("営業結果", ["すべて", "店舗黒字 (還元不足)", "出玉還元 (客勝ち)"])
+    # フィルタ
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        filter_type = st.selectbox("特日・通常日絞り込み", ["すべて", "特日のみ", "通常日のみ"])
+    with col_f2:
+        filter_result = st.selectbox("黒字・赤字絞り込み", ["すべて", "店舗黒字 (客負け)", "店舗赤字 (客勝ち)"])
 
     df_filtered = df_daily.copy()
-    if f_special == "特日のみ":
+    if filter_type == "特日のみ":
         df_filtered = df_filtered[df_filtered["is_special"]]
-    elif f_special == "通常日のみ":
+    elif filter_type == "通常日のみ":
         df_filtered = df_filtered[~df_filtered["is_special"]]
 
-    if f_dow:
-        df_filtered = df_filtered[df_filtered["dow_jp"].isin(f_dow)]
-
-    if f_win == "店舗黒字 (還元不足)":
+    if filter_result == "店舗黒字 (客負け)":
         df_filtered = df_filtered[df_filtered["hall_coin_profit"] > 0]
-    elif f_win == "出玉還元 (客勝ち)":
+    elif filter_result == "店舗赤字 (客勝ち)":
         df_filtered = df_filtered[df_filtered["hall_coin_profit"] < 0]
 
-    cols_to_show = [
-        "date", "dow_jp", "is_special", "avg_diff", "avg_games", "win_rate",
-        "total_machines", "total_diff_coins", display_val_col, "payout_rate", "top_models"
+    cols_show = [
+        "date", "dow_jp", "is_special", "total_machines", "avg_games",
+        "avg_diff", "total_diff_coins", "win_rate", "payout_rate", display_val_col
     ]
     rename_dict = {
         "date": "日付",
         "dow_jp": "曜日",
         "is_special": "特日",
-        "avg_diff": "台平均差枚",
-        "avg_games": "平均G数",
-        "win_rate": "勝率(%)",
         "total_machines": "台数",
+        "avg_games": "平均G数",
+        "avg_diff": "台平均差枚",
         "total_diff_coins": "総差枚数",
-        display_val_col: "ホール粗利" if is_hall else "客収支",
-        "payout_rate": "機械割(%)",
-        "top_models": "優秀機種"
+        "win_rate": "勝率(%)",
+        "payout_rate": "出玉率(%)",
+        display_val_col: "粗利 (円)" if is_hall else "客収支 (円)"
     }
+    df_table = df_filtered[cols_show].rename(columns=rename_dict).sort_values("日付", ascending=False)
 
-    display_df = df_filtered[cols_to_show].rename(columns=rename_dict).sort_values("日付", ascending=False)
     st.dataframe(
-        display_df.style.format({
-            "台平均差枚": "{:+,}枚",
-            "平均G数": "{:,}G",
-            "勝率(%)": "{:.1f}%",
+        df_table.style.format({
             "台数": "{:,}台",
+            "平均G数": "{:,}G",
+            "台平均差枚": "{:+,}枚",
             "総差枚数": "{:+,}枚",
-            "ホール粗利" if is_hall else "客収支": "{:+,}円",
-            "機械割(%)": "{:.2f}%"
+            "勝率(%)": "{:.1f}%",
+            "出玉率(%)": "{:.2f}%",
+            "粗利 (円)" if is_hall else "客収支 (円)": "{:+,}円"
         }),
         use_container_width=True,
         hide_index=True
     )
 
-
 # --------------------------------------------------------------------------
 # TAB 3: 曜日別分析
 # --------------------------------------------------------------------------
 with tab_dow:
-    st.subheader("📆 曜日別の傾向分析")
+    st.subheader("曜日別パフォーマンス分析")
 
-    dow_summary = []
+    dow_rows = []
     for dow in JAPANESE_DAYS:
         sub = df_daily[df_daily["dow_jp"] == dow]
         cnt = len(sub)
         if cnt == 0:
             continue
-        dow_summary.append({
+        tot_prof = float(sub[display_val_col].sum())
+        d_avg = tot_prof / cnt
+        diff_avg = float(sub["total_diff_coins"].sum() / cnt)
+        m_mach = float(sub["total_machines"].mean())
+        per_m_d = d_avg / m_mach if m_mach > 0 else 0
+        g_avg = float(sub["avg_games"].mean())
+        w_rate = float(sub["win_rate"].mean())
+        h_w = int((sub["hall_coin_profit"] > 0).sum())
+
+        dow_rows.append({
             "曜日": dow,
-            "営業日数": cnt,
-            "台平均差枚": round(sub["avg_diff"].mean(), 1),
-            "平均G数": round(sub["avg_games"].mean()),
-            "勝率": round(sub["win_rate"].mean(), 1) if "win_rate" in sub else 0,
-            "1日平均粗利" if is_hall else "1日平均収支": round(sub[display_val_col].mean()),
-            "台日粗利" if is_hall else "台日収支": round(sub[display_val_col].mean() / sub["total_machines"].mean()),
+            "日数": cnt,
+            "1日平均粗利" if is_hall else "1日平均収支": round(d_avg),
+            "台日粗利" if is_hall else "台日収支": round(per_m_d),
+            "平均総差枚": round(diff_avg),
+            "平均G数": round(g_avg),
+            "平均勝率": round(w_rate, 1),
+            "黒字確率" if is_hall else "勝率": round((h_w / cnt * 100), 1)
         })
 
-    df_dow = pd.DataFrame(dow_summary)
+    df_dow = pd.DataFrame(dow_rows)
 
     col_g1, col_g2 = st.columns(2)
     with col_g1:
         fig_dow1 = px.bar(
             df_dow,
             x="曜日",
-            y="台平均差枚",
-            text_auto="+.1f",
-            title="曜日別 台平均差枚数",
-            color="台平均差枚",
-            color_continuous_scale="Blues" if not is_hall else "Reds_r"
+            y="1日平均粗利" if is_hall else "1日平均収支",
+            title="曜日別 1日平均粗利" if is_hall else "曜日別 1日平均収支",
+            color="1日平均粗利" if is_hall else "1日平均収支",
+            color_continuous_scale=["#f43f5e", "#cbd5e1", "#059669"] if is_hall else ["#f43f5e", "#cbd5e1", "#2563eb"],
+            text_auto=",.0f"
         )
+        fig_dow1.update_layout(height=360)
         st.plotly_chart(fig_dow1, use_container_width=True)
 
     with col_g2:
         fig_dow2 = px.bar(
             df_dow,
             x="曜日",
-            y="1日平均粗利" if is_hall else "1日平均収支",
-            text_auto=",.0f",
-            title="曜日別 1日平均粗利" if is_hall else "曜日別 1日平均客収支",
-            color="1日平均粗利" if is_hall else "1日平均収支",
-            color_continuous_scale="Viridis"
+            y="平均G数",
+            title="曜日別 平均稼働ゲーム数 (G)",
+            text_auto=",.0f"
         )
+        fig_dow2.update_layout(height=360)
         st.plotly_chart(fig_dow2, use_container_width=True)
 
     st.dataframe(df_dow, use_container_width=True, hide_index=True)
-
 
 # --------------------------------------------------------------------------
 # TAB 4: 末尾日分析
 # --------------------------------------------------------------------------
 with tab_tail:
-    st.subheader("🔢 日付末尾 (0〜9のつく日) 分析")
+    st.subheader("日付末尾（0〜9）別パフォーマンス分析")
 
     df_daily["tail"] = df_daily["date_dt"].dt.day % 10
-    tail_summary = []
+
+    tail_rows = []
     for t in range(10):
         sub = df_daily[df_daily["tail"] == t]
         cnt = len(sub)
         if cnt == 0:
             continue
-        tail_summary.append({
+        tot_prof = float(sub[display_val_col].sum())
+        d_avg = tot_prof / cnt
+        diff_avg = float(sub["total_diff_coins"].sum() / cnt)
+        m_mach = float(sub["total_machines"].mean())
+        per_m_d = d_avg / m_mach if m_mach > 0 else 0
+        g_avg = float(sub["avg_games"].mean())
+        w_rate = float(sub["win_rate"].mean())
+        h_w = int((sub["hall_coin_profit"] > 0).sum())
+
+        tail_rows.append({
             "末尾": f"{t}のつく日",
             "日数": cnt,
-            "台平均差枚": round(sub["avg_diff"].mean(), 1),
-            "平均G数": round(sub["avg_games"].mean()),
-            "勝率": round(sub["win_rate"].mean(), 1),
-            "1日平均粗利" if is_hall else "1日平均収支": round(sub[display_val_col].mean()),
-            "特日該当日数": int(sub["is_special"].sum())
+            "1日平均粗利" if is_hall else "1日平均収支": round(d_avg),
+            "台日粗利" if is_hall else "台日収支": round(per_m_d),
+            "平均総差枚": round(diff_avg),
+            "平均G数": round(g_avg),
+            "平均勝率": round(w_rate, 1),
+            "黒字確率" if is_hall else "勝率": round((h_w / cnt * 100), 1)
         })
 
-    df_tail = pd.DataFrame(tail_summary).sort_values("台平均差枚", ascending=False)
+    df_tail = pd.DataFrame(tail_rows)
 
     fig_tail = px.bar(
         df_tail,
         x="末尾",
-        y="台平均差枚",
-        text_auto="+.1f",
-        title="日付末尾別 台平均差枚ランキング",
-        color="台平均差枚",
-        color_continuous_scale="RdBu_r" if is_hall else "RdBu"
+        y="1日平均粗利" if is_hall else "1日平均収支",
+        title="末尾別 1日平均粗利" if is_hall else "末尾別 1日平均収支",
+        color="1日平均粗利" if is_hall else "1日平均収支",
+        color_continuous_scale=["#f43f5e", "#cbd5e1", "#059669"] if is_hall else ["#f43f5e", "#cbd5e1", "#2563eb"],
+        text_auto=",.0f"
     )
+    fig_tail.update_layout(height=360)
     st.plotly_chart(fig_tail, use_container_width=True)
 
     st.dataframe(df_tail, use_container_width=True, hide_index=True)
 
-
 # --------------------------------------------------------------------------
-# TAB 5: 特日 vs 通常日比較
+# TAB 5: 特日 vs 通常日
 # --------------------------------------------------------------------------
 with tab_special:
-    st.subheader("🎯 特日 vs 通常日 比較分析")
+    st.subheader("🎯 特定日 vs 通常営業日 比較")
 
     df_sp = df_daily[df_daily["is_special"]]
     df_no = df_daily[~df_daily["is_special"]]
@@ -1070,7 +1099,6 @@ with tab_special:
         {
             "区分": "特定日 (旧イベント日等)",
             "営業日数": len(df_sp),
-            "台平均差枚": round(df_sp["avg_diff"].mean(), 1) if not df_sp.empty else 0,
             "平均G数": round(df_sp["avg_games"].mean()) if not df_sp.empty else 0,
             "勝率": round(df_sp["win_rate"].mean(), 1) if not df_sp.empty else 0,
             "1日平均粗利" if is_hall else "1日平均収支": round(df_sp[display_val_col].mean()) if not df_sp.empty else 0,
@@ -1079,7 +1107,6 @@ with tab_special:
         {
             "区分": "通常営業日",
             "営業日数": len(df_no),
-            "台平均差枚": round(df_no["avg_diff"].mean(), 1) if not df_no.empty else 0,
             "平均G数": round(df_no["avg_games"].mean()) if not df_no.empty else 0,
             "勝率": round(df_no["win_rate"].mean(), 1) if not df_no.empty else 0,
             "1日平均粗利" if is_hall else "1日平均収支": round(df_no[display_val_col].mean()) if not df_no.empty else 0,
@@ -1089,17 +1116,15 @@ with tab_special:
     df_comp = pd.DataFrame(comp_data)
     st.dataframe(df_comp, use_container_width=True, hide_index=True)
 
-
 # --------------------------------------------------------------------------
-# TAB 6: データエクスポート
+# TAB 6: エクスポート
 # --------------------------------------------------------------------------
 with tab_export:
-    st.subheader("💾 分析データのCSVエクスポート")
-    csv_bytes = df_daily.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+    st.subheader("データエクスポート")
+    csv_bytes = df_daily.to_csv(index=False).encode('utf-8-sig')
     st.download_button(
         label="📥 計算済み日別データをCSVダウンロード",
         data=csv_bytes,
-        file_name=f"{raw_store_data['name']}_financial_daily.csv",
+        file_name=f"{raw_store_data['name']}_分析データ.csv",
         mime="text/csv"
     )
-    st.caption("計算されたModel A/Model Bの粗利、売上、機械割、特日判定を含む全カラムが出力されます。")
