@@ -34,6 +34,136 @@ st.set_page_config(
 )
 
 # --------------------------------------------------------------------------
+# 洗練されたUIカスタムスタイル (React版デザインを忠実に再現)
+# --------------------------------------------------------------------------
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    /* 背景色を上品なスレートグレーに */
+    .stApp {
+        background-color: #f8fafc;
+    }
+    
+    /* サイドバー */
+    [data-testid="stSidebar"] {
+        background-color: #ffffff;
+        border-right: 1px solid #e2e8f0;
+    }
+    
+    /* ヘッダーカード */
+    .hero-card {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #ffffff;
+        padding: 24px 28px;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);
+        margin-bottom: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .hero-title {
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin: 0 0 8px 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .hero-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .hero-tag {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.12);
+        color: #f1f5f9;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    /* KPIカードコンテナ */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-bottom: 24px;
+    }
+    .kpi-box {
+        background: #ffffff;
+        padding: 18px 20px;
+        border-radius: 14px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 2px 8px rgba(0,0,0,0.04);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .kpi-box:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.08);
+    }
+    .kpi-tit {
+        font-size: 11px;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 6px;
+    }
+    .kpi-num {
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        margin-bottom: 4px;
+    }
+    .kpi-desc {
+        font-size: 12px;
+        font-weight: 500;
+        color: #94a3b8;
+    }
+
+    /* タブデザインの刷新 */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+        background-color: #f1f5f9;
+        padding: 5px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 20px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 13px;
+        padding: 8px 18px;
+        color: #64748b;
+        border: none;
+        background: transparent;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important;
+    }
+
+    /* ボタンスタイル */
+    .stButton > button {
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --------------------------------------------------------------------------
 # サンプルデータ (プラザ515)
 # --------------------------------------------------------------------------
 SAMPLE_PLAZA_515_HTML = """<!DOCTYPE html>
@@ -543,12 +673,26 @@ active_profit_col = "model_b_hall_yen" if use_model_b else "model_a_hall_yen"
 active_player_col = "model_b_player_yen" if use_model_b else "model_a_player_yen"
 display_val_col = active_profit_col if is_hall else active_player_col
 
-# ヘッダー表示
-st.title(f"🎰 {raw_store_data['name']} 粗利・売上分析")
-st.caption(f"📍 所在地: {raw_store_data['address']} | 換金率: {raw_store_data['exchange_rate_str']} | 旧イベント: {raw_store_data['old_event_days']} | 集計日数: {len(df_daily)}営業日")
+# --------------------------------------------------------------------------
+# ヘッダーカード (モダンWeb風)
+# --------------------------------------------------------------------------
+st.markdown(f"""
+<div class="hero-card">
+    <div class="hero-title">
+        <span>🎰</span>
+        <span>{raw_store_data['name']} 粗利・売上分析</span>
+    </div>
+    <div class="hero-tags">
+        <span class="hero-tag">📍 {raw_store_data['address']}</span>
+        <span class="hero-tag">🪙 {raw_store_data['exchange_rate_str']}</span>
+        <span class="hero-tag">🎯 旧イベント: {raw_store_data['old_event_days']}</span>
+        <span class="hero-tag">📅 集計日数: {len(df_daily):,} 営業日</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------
-# TOP KPI カード
+# TOP KPI カード (React風モダンカードグリッド)
 # --------------------------------------------------------------------------
 total_profit = df_daily[display_val_col].sum()
 days_count = len(df_daily)
@@ -568,31 +712,50 @@ avg_payout_rate = (sum_out / sum_in * 100) if sum_in > 0 else 100.0
 hall_wins = (df_daily["hall_coin_profit"] > 0).sum()
 player_wins = (df_daily["player_coin_profit"] > 0).sum()
 
-kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
+label_total = "累計ホール粗利" if is_hall else "累計ユーザー収支"
+label_daily = "1日平均粗利" if is_hall else "1日平均収支"
+label_unit = "台日粗利" if is_hall else "台日収支"
+win_label = "店舗黒字 / 出玉還元" if is_hall else "客側勝ち / 店側回収"
+w1 = hall_wins if is_hall else player_wins
+w2 = player_wins if is_hall else hall_wins
 
-with kpi1:
-    label = "累計ホール粗利" if is_hall else "累計ユーザー収支"
-    st.metric(label, f"{total_profit:,.0f} 円")
+color_total = "#059669" if total_profit >= 0 else "#e11d48"
+color_diff = "#2563eb" if total_diff_coins >= 0 else "#dc2626"
 
-with kpi2:
-    label = "1日平均粗利" if is_hall else "1日平均収支"
-    st.metric(label, f"{daily_avg:,.0f} 円/日")
-
-with kpi3:
-    label = "台日粗利 (日/台)" if is_hall else "台日収支 (日/台)"
-    st.metric(label, f"{per_machine_daily:,.0f} 円")
-
-with kpi4:
-    st.metric("総差枚数", f"{total_diff_coins:+,.0f} 枚", f"平均: {avg_diff_coins:+.1f}枚/台")
-
-with kpi5:
-    st.metric("出玉率 (機械割)", f"{avg_payout_rate:.2f} %", f"推定売上: {total_revenue/10000:,.0f}万円")
-
-with kpi6:
-    win_label = "店舗黒字 / 出玉還元" if is_hall else "客側勝ち / 店側回収"
-    w1 = hall_wins if is_hall else player_wins
-    w2 = player_wins if is_hall else hall_wins
-    st.metric(win_label, f"{w1}勝 {w2}敗", f"勝率: {(w1/days_count*100):.1f}%")
+st.markdown(f"""
+<div class="kpi-grid">
+    <div class="kpi-box">
+        <div class="kpi-tit">{label_total}</div>
+        <div class="kpi-num" style="color: {color_total};">{total_profit:+,.0f}<span style="font-size: 14px; font-weight:600; margin-left: 2px;">円</span></div>
+        <div class="kpi-desc">期間累計推定値</div>
+    </div>
+    <div class="kpi-box">
+        <div class="kpi-tit">{label_daily}</div>
+        <div class="kpi-num" style="color: {color_total};">{daily_avg:+,.0f}<span style="font-size: 14px; font-weight:600; margin-left: 2px;">円/日</span></div>
+        <div class="kpi-desc">営業日平均</div>
+    </div>
+    <div class="kpi-box">
+        <div class="kpi-tit">{label_unit}</div>
+        <div class="kpi-num" style="color: #0f172a;">{per_machine_daily:+,.0f}<span style="font-size: 14px; font-weight:600; margin-left: 2px;">円</span></div>
+        <div class="kpi-desc">1日・1台あたり</div>
+    </div>
+    <div class="kpi-box">
+        <div class="kpi-tit">総差枚数</div>
+        <div class="kpi-num" style="color: {color_diff};">{total_diff_coins:+,.0f}<span style="font-size: 14px; font-weight:600; margin-left: 2px;">枚</span></div>
+        <div class="kpi-desc">平均: {avg_diff_coins:+.1f} 枚/台</div>
+    </div>
+    <div class="kpi-box">
+        <div class="kpi-tit">出玉率 (機械割)</div>
+        <div class="kpi-num" style="color: #4f46e5;">{avg_payout_rate:.2f}<span style="font-size: 14px; font-weight:600; margin-left: 2px;">%</span></div>
+        <div class="kpi-desc">推定売上: {total_revenue/10000:,.0f}万円</div>
+    </div>
+    <div class="kpi-box">
+        <div class="kpi-tit">{win_label}</div>
+        <div class="kpi-num" style="color: #0f172a;">{w1}<span style="font-size: 13px; color:#64748b; font-weight:600;">勝</span> {w2}<span style="font-size: 13px; color:#64748b; font-weight:600;">敗</span></div>
+        <div class="kpi-desc">勝率: {(w1/days_count*100):.1f}%</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 
 # --------------------------------------------------------------------------
