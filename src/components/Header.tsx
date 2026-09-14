@@ -12,6 +12,7 @@ import {
   Plus,
   Target,
   Pencil,
+  Terminal,
 } from 'lucide-react';
 import { SpecialDayRuleModal } from './SpecialDayRuleModal';
 
@@ -31,6 +32,7 @@ interface HeaderProps {
   totalDays: number;
   totalMonths?: number;
   onOpenStoreManager?: () => void;
+  onOpenStreamlitModal?: () => void;
   onChangeOldEventDays?: (newRuleText: string) => void;
 }
 
@@ -48,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   totalDays,
   totalMonths = 0,
   onOpenStoreManager,
+  onOpenStreamlitModal,
   onChangeOldEventDays,
 }) => {
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
@@ -84,6 +87,17 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Layers className="w-3.5 h-3.5" />
                   他店舗に切替 / 新規取込
+                </button>
+              )}
+              {onOpenStreamlitModal && (
+                <button
+                  type="button"
+                  onClick={onOpenStreamlitModal}
+                  className="px-3 py-1 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-all cursor-pointer border border-rose-400/30"
+                  title="Python / Streamlit でこのアプリを実行するためのスクリプト・設定を確認"
+                >
+                  <Terminal className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Streamlit (Python) で実行</span>
                 </button>
               )}
             </div>

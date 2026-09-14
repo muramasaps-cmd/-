@@ -11,6 +11,7 @@ import { MonthlyTable } from './components/MonthlyTable';
 import { DailyModal } from './components/DailyModal';
 import { StoreManagerModal } from './components/StoreManagerModal';
 import { ConfirmModal } from './components/ConfirmModal';
+import { StreamlitModal } from './components/StreamlitModal';
 import { processStoreData } from './utils/dataEngine';
 import { parseSlorepoHtml, parseRatesFromExchangeRate } from './utils/htmlParser';
 import { parseSpecialDayRulesFromText } from './utils/specialDayRules';
@@ -49,6 +50,7 @@ export default function App() {
   const [activeStoreIdState, setActiveStoreIdState] = useState<string>(() => getActiveStoreId());
   const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState<boolean>(false);
+  const [isStreamlitModalOpen, setIsStreamlitModalOpen] = useState<boolean>(false);
 
   // Active store object
   const currentStore = useMemo(() => {
@@ -457,6 +459,7 @@ export default function App() {
         totalDays={filteredDailyRecords.length}
         totalMonths={filteredMonthlyStats.length}
         onOpenStoreManager={() => setIsStoreModalOpen(true)}
+        onOpenStreamlitModal={() => setIsStreamlitModalOpen(true)}
         onChangeOldEventDays={handleChangeOldEventDays}
       />
 
@@ -787,6 +790,14 @@ export default function App() {
           setIsResetConfirmOpen(false);
         }}
         onCancel={() => setIsResetConfirmOpen(false)}
+      />
+
+      {/* Streamlit Python Runner Modal */}
+      <StreamlitModal
+        isOpen={isStreamlitModalOpen}
+        onClose={() => setIsStreamlitModalOpen(false)}
+        currentStore={currentStore}
+        dailyRecords={filteredDailyRecords}
       />
 
       {/* Footer */}
