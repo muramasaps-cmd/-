@@ -15,7 +15,6 @@ import { StreamlitModal } from './components/StreamlitModal';
 import { processStoreData } from './utils/dataEngine';
 import { parseSlorepoHtml, parseRatesFromExchangeRate } from './utils/htmlParser';
 import { parseSpecialDayRulesFromText } from './utils/specialDayRules';
-import { SAMPLE_PLAZA_515_HTML } from './data/samplePlaza515Html';
 import {
   getSavedStores,
   getActiveStoreId,
@@ -329,15 +328,6 @@ export default function App() {
                   HTMLコード直接貼り付け
                 </button>
               </div>
-
-              <button
-                type="button"
-                onClick={() => handleDirectHtmlImport(SAMPLE_PLAZA_515_HTML)}
-                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                添付サンプル「プラザ５１５」を取り込む
-              </button>
             </div>
 
             {/* Drag & Drop File Zone */}
@@ -677,22 +667,29 @@ export default function App() {
           setCashRatio={setCashRatio}
         />
 
-        {/* KPI Cards */}
-        <KpiCards
-          monthlyStats={filteredMonthlyStats}
-          perspective={perspective}
-          unit={unit}
-          profitModel={profitModel}
-        />
+        {/* TOP Section: Left KPI Cards / Right Monthly Profit Chart */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          {/* TOP Left: KPI Cards (2x2 grid) */}
+          <div className="lg:col-span-5 flex flex-col justify-between">
+            <KpiCards
+              monthlyStats={filteredMonthlyStats}
+              perspective={perspective}
+              unit={unit}
+              profitModel={profitModel}
+            />
+          </div>
 
-        {/* Monthly Profit Chart */}
-        <ProfitChart
-          monthlyStats={filteredMonthlyStats}
-          perspective={perspective}
-          unit={unit}
-          profitModel={profitModel}
-          onSelectMonth={(ym) => setSelectedMonthModal(ym)}
-        />
+          {/* TOP Right: Monthly Profit Chart */}
+          <div className="lg:col-span-7 flex flex-col">
+            <ProfitChart
+              monthlyStats={filteredMonthlyStats}
+              perspective={perspective}
+              unit={unit}
+              profitModel={profitModel}
+              onSelectMonth={(ym) => setSelectedMonthModal(ym)}
+            />
+          </div>
+        </div>
 
         {/* 〇のつく日別の利益・出玉傾向分析 */}
         <TailNumberAnalysis

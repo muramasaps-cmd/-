@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { StoreProfile } from '../data/types';
-import { SAMPLE_PLAZA_515_HTML } from '../data/samplePlaza515Html';
 import { ConfirmModal } from './ConfirmModal';
 import {
   parseMultipleSlorepoHtml,
@@ -207,11 +206,6 @@ export const StoreManagerModal: React.FC<StoreManagerModalProps> = ({
     setStagedGroups((prev) => prev.filter((g) => g.store.id !== storeId));
   };
 
-  // Load sample Plaza 515 directly
-  const handleLoadSamplePlaza515 = () => {
-    handleProcessPastedHtml(SAMPLE_PLAZA_515_HTML);
-  };
-
   // Reset all
   const handleResetConfirm = () => {
     setConfirmResetOpen(true);
@@ -333,15 +327,6 @@ export const StoreManagerModal: React.FC<StoreManagerModalProps> = ({
                     HTMLコードを直接貼り付け
                   </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleLoadSamplePlaza515}
-                  className="px-3 py-1.5 bg-slate-50 hover:bg-amber-50 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  添付サンプル「プラザ５１５」を取り込む
-                </button>
               </div>
 
               {/* Mode A: File Dropzone (Multiple Files) */}
@@ -598,20 +583,13 @@ export const StoreManagerModal: React.FC<StoreManagerModalProps> = ({
                   <p className="text-xs text-slate-500 max-w-md mx-auto">
                     スロレポのHTMLファイルを取り込んで店舗を追加してください。
                   </p>
-                  <div className="pt-2 flex justify-center gap-2">
+                  <div className="pt-2 flex justify-center">
                     <button
                       type="button"
                       onClick={() => setActiveTab('import')}
-                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer"
+                      className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer"
                     >
                       HTMLファイルを取り込む
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleLoadSamplePlaza515}
-                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold cursor-pointer"
-                    >
-                      添付サンプル「プラザ５１５」を取り込む
                     </button>
                   </div>
                 </div>

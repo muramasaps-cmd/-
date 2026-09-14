@@ -1,22 +1,10 @@
 import { StoreProfile } from '../data/types';
-import { parseSlorepoHtml, parseRatesFromExchangeRate } from './htmlParser';
-import { SAMPLE_PLAZA_515_HTML } from '../data/samplePlaza515Html';
+import { parseRatesFromExchangeRate } from './htmlParser';
 import { parseSpecialDayRulesFromText } from './specialDayRules';
 
+// Sample store is disabled per user request
 const STORAGE_KEY_STORES = 'SLOT_ANALYZER_HTML_STORES_V1';
 const STORAGE_KEY_ACTIVE_ID = 'SLOT_ANALYZER_HTML_ACTIVE_ID_V1';
-
-/**
- * Creates initial store from the user-provided sample HTML (Plaza 515)
- */
-function getInitialSampleStore(): StoreProfile[] {
-  const result = parseSlorepoHtml(SAMPLE_PLAZA_515_HTML);
-  if (result.success && result.store) {
-    result.store.id = 'plaza-515';
-    return [result.store];
-  }
-  return [];
-}
 
 /**
  * Helper to normalize store rates and fill any blank machine counts from other days
@@ -111,9 +99,8 @@ function normalizeStore(store: StoreProfile): StoreProfile {
 
 /**
  * Load all registered stores from LocalStorage.
- * Only stores imported from HTML files are retained.
- * Normalizes rateLend and rateExchange to match the store's exchangeRate,
- * and ensures blank machine counts on any day are backfilled from other days.
+ * Only stores imported from user's HTML files are retained.
+ * Sample store is completely excluded.
  */
 export function getSavedStores(): StoreProfile[] {
   try {
@@ -121,32 +108,20 @@ export function getSavedStores(): StoreProfile[] {
     if (raw !== null) {
       const parsed: StoreProfile[] = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        const stores = parsed.map(normalizeStore);
-        // Check if plaza-515 is missing 2026-01 ~ 2026-04 records from old cache
-        const plazaIdx = stores.findIndex((s) => s.id === 'plaza-515');
-        if (plazaIdx >= 0) {
-          const has2026Early = stores[plazaIdx].dailyRecords?.some(
-            (r) => r.yearMonth === '2026-01' || r.yearMonth === '2026-04'
-          );
-          if (!has2026Early) {
-            const freshInitial = getInitialSampleStore();
-            if (freshInitial.length > 0) {
-              stores[plazaIdx] = normalizeStore(freshInitial[0]);
-              saveStoresToStorage(stores);
-            }
+        // Filter out sample store 'plaza-515' completely
+        const filtered = parsed.filter((s) => s.id !== 'plaza-515').map(normalizeStore);
+        if (filtered.length !== parsed.length) {
+          saveStoresToStorage(filtered);
+          if (getActiveStoreId() === 'plaza-515') {
+            setActiveStoreId(filtered.length > 0 ? filtered[0].id : '');
           }
         }
-        return stores;
+        return filtered;
       }
     }
 
-    // First time load: initialize with the attached user sample HTML (Plaza 515)
-    const initial = getInitialSampleStore().map(normalizeStore);
-    saveStoresToStorage(initial);
-    if (initial.length > 0) {
-      setActiveStoreId(initial[0].id);
-    }
-    return initial;
+    // Default: no sample store, starts clean
+    return [];
   } catch (err) {
     console.warn('Failed to load stores from localStorage', err);
     return [];

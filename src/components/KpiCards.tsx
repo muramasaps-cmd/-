@@ -93,11 +93,11 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 h-full">
       {/* 1. 期間累計収支 */}
       <div
         id="kpi-card-total"
-        className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
+        className="bg-white rounded-xl p-4 sm:p-4.5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
       >
         <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
           <span>
@@ -146,7 +146,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       {/* 2. 月平均収支 */}
       <div
         id="kpi-card-monthly-avg"
-        className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
+        className="bg-white rounded-xl p-4 sm:p-4.5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
       >
         <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
           <span>{perspective === 'hall' ? '月平均 ホール粗利' : '月平均 ユーザー収支'}</span>
@@ -186,7 +186,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       {/* 3. 最高利益月 (店黒字No.1 / 客勝ちNo.1) */}
       <div
         id="kpi-card-best-month"
-        className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
+        className="bg-white rounded-xl p-4 sm:p-4.5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
       >
         <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
           <span>{perspective === 'hall' ? '最高利益月 (店黒字No.1)' : '最高出玉月 (客勝ちNo.1)'}</span>
@@ -222,7 +222,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       {/* 4. 最大還元月 (店赤字No.1) or 最低収支月 */}
       <div
         id="kpi-card-worst-month"
-        className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow"
+        className="bg-white rounded-xl p-4 sm:p-4.5 border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
       >
         <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
           <span>{perspective === 'hall' ? '最大還元月 (店赤字No.1)' : '最低収支月 (客負けNo.1)'}</span>

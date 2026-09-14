@@ -179,9 +179,9 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
+    <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs h-full flex flex-col justify-between">
       {/* Chart Header Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-amber-500" />
@@ -200,7 +200,7 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
           <button
             type="button"
             onClick={() => setChartType('bar')}
-            className={`px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1 ${
+            className={`px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1 cursor-pointer ${
               chartType === 'bar'
                 ? 'bg-white text-slate-900 shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900'
@@ -212,7 +212,7 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
           <button
             type="button"
             onClick={() => setChartType('cumulative')}
-            className={`px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1 ${
+            className={`px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1 cursor-pointer ${
               chartType === 'cumulative'
                 ? 'bg-white text-slate-900 shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900'
@@ -224,7 +224,7 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
           <button
             type="button"
             onClick={() => setChartType('games')}
-            className={`px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1 ${
+            className={`px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1 cursor-pointer ${
               chartType === 'games'
                 ? 'bg-white text-slate-900 shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900'
@@ -237,7 +237,7 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
       </div>
 
       {/* Chart Canvas */}
-      <div className="w-full h-80 sm:h-96">
+      <div className="w-full flex-1 min-h-[300px] sm:min-h-[340px]">
         <ResponsiveContainer width="100%" height="100%">
           {chartType === 'bar' ? (
             <BarChart

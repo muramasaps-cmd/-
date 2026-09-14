@@ -133,7 +133,7 @@ st.markdown("""
         border-color: rgba(56, 189, 248, 0.4);
     }
 
-    /* KPIカード グリッド */
+    /* KPIカード グリッド (全幅用) */
     .kpi-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -146,6 +146,25 @@ st.markdown("""
         border-radius: 14px;
         padding: 18px 20px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+
+    /* KPIカード グリッド (TOP左側 2x2レイアウト) */
+    .kpi-grid-top {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .kpi-card-top {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 14px 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 145px;
     }
     .kpi-card-head {
         display: flex;
@@ -831,81 +850,65 @@ def format_coins(val: float) -> str:
 
 
 # --------------------------------------------------------------------------
-# サンプルデータ読み込み (プラザ515)
-# --------------------------------------------------------------------------
-def load_builtin_sample_html() -> str:
-    sample_paths = [
-        "src/data/samplePlaza515Html.ts",
-        "scripts/input1.html",
-        "../src/data/samplePlaza515Html.ts"
-    ]
-    for p in sample_paths:
-        if os.path.exists(p):
-            try:
-                with open(p, "r", encoding="utf-8", errors="ignore") as f:
-                    txt = f.read()
-                m = re.search(r'SAMPLE_PLAZA_515_HTML\s*=\s*`([^`]+)`', txt, re.DOTALL)
-                if m:
-                    return m.group(1)
-                return txt
-            except Exception:
-                pass
-    return ""
-
-
-# --------------------------------------------------------------------------
 # サイドバーフィルター・設定
 # --------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### 🎰 スロレポ分析フィルター設定")
+    st.markdown("### 🎰 スロレポ分析設定")
 
-    # データソース選択
-    data_source_mode = st.radio(
-        "データソース選択",
-        ["🌟 サンプル店舗 (プラザ５１５)", "📁 自分のHTMLファイルをアップロード"],
-        index=0
+    # データ取り込み
+    st.markdown("#### 📁 スロレポHTML取り込み")
+    upload_method = st.radio(
+        "取り込み方法",
+        ["HTMLファイル選択 / ドロップ", "HTMLコード直接貼り付け"],
+        index=0,
+        label_visibility="collapsed"
     )
 
-    uploaded_files = st.file_uploader(
-        "スロレポHTMLファイルを選択 / ドロップ",
-        type=["html", "htm"],
-        accept_multiple_files=True,
-        help="スロレポの店舗出玉ページ（.html）をアップロード。複数月・複数ファイル一括取込可能"
-    )
-
-    # パース実行
     raw_store_data = None
-    is_using_sample = False
 
-    if uploaded_files and (data_source_mode == "📁 自分のHTMLファイルをアップロード" or len(uploaded_files) > 0):
-        combined_records = []
-        store_meta = None
-        for f in uploaded_files:
-            content = f.read().decode("utf-8", errors="ignore")
-            parsed = parse_slorepo_html(content)
-            if not store_meta or store_meta["name"] == "スロレポ店舗":
-                store_meta = parsed
-            combined_records.extend(parsed["raw_records"])
+    if upload_method == "HTMLファイル選択 / ドロップ":
+        uploaded_files = st.file_uploader(
+            "スロレポHTMLファイルを選択 / ドロップ",
+            type=["html", "htm"],
+            accept_multiple_files=True,
+            help="スロレポの店舗出玉ページ（.html）をアップロード。複数月・複数ファイル一括取込可能"
+        )
+        if uploaded_files:
+            combined_records = []
+            store_meta = None
+            for f in uploaded_files:
+                content = f.read().decode("utf-8", errors="ignore")
+                parsed = parse_slorepo_html(content)
+                if not store_meta or store_meta["name"] == "スロレポ店舗":
+                    store_meta = parsed
+                combined_records.extend(parsed["raw_records"])
 
-        date_dict = {}
-        for r in combined_records:
-            d = r["date"]
-            if d not in date_dict or (r.get("row_total_machines") and not date_dict[d].get("row_total_machines")):
-                date_dict[d] = r
+            date_dict = {}
+            for r in combined_records:
+                d = r["date"]
+                if d not in date_dict or (r.get("row_total_machines") and not date_dict[d].get("row_total_machines")):
+                    date_dict[d] = r
 
-        unique_records = sorted(list(date_dict.values()), key=lambda x: x["date"])
-        if store_meta and unique_records:
-            store_meta["raw_records"] = unique_records
-            raw_store_data = store_meta
-            st.success(f"✅ {len(uploaded_files)}ファイル / {len(unique_records):,}営業日 読込完了")
-        else:
-            st.warning("⚠️ アップロードされたHTMLから出玉行を検出できませんでした。サンプルを表示します。")
-
-    if not raw_store_data:
-        sample_html = load_builtin_sample_html()
-        if sample_html:
-            raw_store_data = parse_slorepo_html(sample_html)
-            is_using_sample = True
+            unique_records = sorted(list(date_dict.values()), key=lambda x: x["date"])
+            if store_meta and unique_records:
+                store_meta["raw_records"] = unique_records
+                raw_store_data = store_meta
+                st.success(f"✅ {len(uploaded_files)}ファイル / {len(unique_records):,}営業日 読込完了")
+            else:
+                st.error("⚠️ アップロードされたHTMLから出玉データを検出できませんでした。")
+    else:
+        pasted_html = st.text_area(
+            "HTMLコードを貼り付け",
+            height=130,
+            placeholder="<!DOCTYPE html>... または <table>... を貼り付け"
+        )
+        if pasted_html.strip():
+            parsed = parse_slorepo_html(pasted_html)
+            if parsed and parsed.get("raw_records"):
+                raw_store_data = parsed
+                st.success(f"✅ {len(parsed['raw_records']):,}営業日 読込完了")
+            else:
+                st.error("⚠️ 貼り付けられたHTMLから出玉データを検出できませんでした。")
 
     st.markdown("---")
 
@@ -1025,7 +1028,13 @@ if not raw_store_data or not raw_store_data.get("raw_records"):
     <div style="background: #1e293b; border: 2px dashed #475569; border-radius: 16px; padding: 48px; text-align: center; max-width: 680px; margin: 40px auto;">
         <div style="font-size: 48px; margin-bottom: 12px;">📥</div>
         <h3 style="color: #ffffff; font-weight: 800; margin-bottom: 8px;">スロレポHTMLファイルをアップロードしてください</h3>
-        <p style="color: #94a3b8; font-size: 14px;">左サイドバーからスロレポの店舗出玉ページ（.html）を選択すると、自動で全出玉・粗利推移が集計されます。</p>
+        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 16px;">
+            左サイドバーからスロレポの店舗出玉ページ（.html）をドロップするか、ファイルを選択してください。<br>
+            店舗名・換金率・特日・全日別出玉が自動解析され、即座に月別利益グラフや詳細分析が表示されます。
+        </p>
+        <span style="color: #f59e0b; font-size: 12px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 4px 12px; border-radius: 6px;">
+            複数月・複数ファイルの一括選択にも対応しています
+        </span>
     </div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -1046,10 +1055,6 @@ df_all = calculate_financials(
 if df_all.empty:
     st.warning("集計データが存在しません。")
     st.stop()
-
-# サンプルデータ使用時の告知バナー
-if is_using_sample:
-    st.info("🌟 **現在サンプルデータ（プラザ５１５）を表示中**: 左サイドバーの「📁 自分のHTMLファイルをアップロード」からお手元のスロレポHTMLを選択すると、自動で実店舗データに切り替わります。")
 
 # 年別フィルター (Web版: selectedYear)
 available_years = sorted(list(df_all["year_str"].unique()), reverse=True)
@@ -1191,100 +1196,215 @@ worst_ym, worst_val, worst_diff, worst_pm = get_month_stat_str(worst_m)
 kpi_color_1 = "#10b981" if total_profit > 0 else "#f43f5e"
 kpi_color_2 = "#38bdf8" if avg_monthly_profit > 0 else "#f43f5e"
 
-st.markdown(f"""
-<div class="kpi-grid">
-    <div class="kpi-card">
-        <div class="kpi-card-head">
-            <span>{'期間累計 ホール粗利 (G数連動)' if is_hall else '期間累計 ユーザー収支 (G数連動)'}</span>
-            <span class="kpi-card-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">💰</span>
-        </div>
-        <div class="kpi-card-value" style="color: {kpi_color_1};">
-            {primary_total_str}
-        </div>
-        <div class="kpi-card-sub">
-            <span>{sub_total_str}</span>
-            <span>{total_months}ヶ月 ({days_count}日)</span>
-        </div>
-        <div class="kpi-card-foot">
-            <span style="color: #94a3b8;">1台あたり累計:</span>
-            <strong style="color: #ffffff;">{per_m_tot_str}</strong>
-        </div>
-    </div>
+# --------------------------------------------------------------------------
+# 月別推移データの事前集計 (TOP右側グラフおよびタブ内詳細表用)
+# --------------------------------------------------------------------------
+monthly_summary_list = []
+for ym, grp in df_daily.groupby("year_month"):
+    days_c = len(grp)
+    p_tot = float(grp[display_val_col].sum())
+    d_avg_month = p_tot / days_c if days_c > 0 else 0
+    diff_tot = float(grp["total_diff_coins"].sum())
+    m_machines = float(grp["total_machines"].mean())
+    per_m_d = d_avg_month / m_machines if m_machines > 0 else 0
+    g_avg = float(grp["avg_games"].mean())
+    payout = (float(grp["out_coins"].sum()) / float(grp["in_coins"].sum()) * 100) if float(grp["in_coins"].sum()) > 0 else 100.0
 
-    <div class="kpi-card">
-        <div class="kpi-card-head">
-            <span>{'月平均 ホール粗利' if is_hall else '月平均 ユーザー収支'}</span>
-            <span class="kpi-card-icon" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">📈</span>
-        </div>
-        <div class="kpi-card-value" style="color: {kpi_color_2};">
-            {monthly_avg_str}<span style="font-size: 13px; font-weight: 600; color: #94a3b8; margin-left: 4px;">/月</span>
-        </div>
-        <div class="kpi-card-sub">
-            <span>1台・月平均: <strong style="color: #cbd5e1;">{pm_monthly_str}</strong></span>
-            <span>稼働 {avg_games_weighted:,.0f}G</span>
-        </div>
-        <div class="kpi-card-foot">
-            <span style="color: #94a3b8;">1台・1日平均:</span>
-            <strong style="color: #818cf8;">{pm_daily_str}</strong>
-        </div>
-    </div>
+    sp_grp = grp[grp["is_special"]]
+    no_grp = grp[~grp["is_special"]]
+    sp_cnt = len(sp_grp)
+    no_cnt = len(no_grp)
+    sp_avg = float(sp_grp[display_val_col].sum() / sp_cnt) if sp_cnt > 0 else 0
+    no_avg = float(no_grp[display_val_col].sum() / no_cnt) if no_cnt > 0 else 0
 
-    <div class="kpi-card">
-        <div class="kpi-card-head">
-            <span>{'最高利益月 (店黒字No.1)' if is_hall else '最高出玉月 (客勝ちNo.1)'}</span>
-            <span class="kpi-card-icon" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">🏆</span>
-        </div>
-        <div class="kpi-card-value" style="color: #ffffff;">
-            {best_ym}
-        </div>
-        <div class="kpi-card-sub">
-            <span style="color: #10b981; font-weight: 700;">{best_val}</span>
-            <span>{best_diff}</span>
-        </div>
-        <div class="kpi-card-foot">
-            <span style="color: #94a3b8;">1台あたり月間:</span>
-            <strong style="color: #ffffff;">{best_pm}</strong>
-        </div>
-    </div>
+    monthly_summary_list.append({
+        "year_month": ym,
+        "営業日数": days_c,
+        "平均台数": round(m_machines),
+        "ホール粗利" if is_hall else "客収支": round(p_tot),
+        "利益_万円": round(p_tot / 10000.0, 1),
+        "1日平均": round(d_avg_month),
+        "全期間平均乖離": round(d_avg_month - daily_avg),
+        "台日あたり": round(per_m_d),
+        "総差枚数": round(diff_tot),
+        "出玉率": round(payout, 2),
+        "平均G数": round(g_avg),
+        "特日日数": sp_cnt,
+        "特日平均": round(sp_avg),
+        "通常日平均": round(no_avg),
+    })
 
-    <div class="kpi-card">
-        <div class="kpi-card-head">
-            <span>{'最大還元月 (店赤字No.1)' if is_hall else '最低収支月 (客負けNo.1)'}</span>
-            <span class="kpi-card-icon" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e;">📉</span>
-        </div>
-        <div class="kpi-card-value" style="color: #ffffff;">
-            {worst_ym}
-        </div>
-        <div class="kpi-card-sub">
-            <span style="color: #f43f5e; font-weight: 700;">{worst_val}</span>
-            <span>{worst_diff}</span>
-        </div>
-        <div class="kpi-card-foot">
-            <span style="color: #94a3b8;">1台あたり月間:</span>
-            <strong style="color: #ffffff;">{worst_pm}</strong>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+df_m_table = pd.DataFrame(monthly_summary_list).sort_values("year_month", ascending=True)
+val_col_name = "ホール粗利" if is_hall else "客収支"
+df_m_table["累計_万円"] = (df_m_table[val_col_name].cumsum() / 10000.0).round(1)
 
-if use_model_b:
-    gap_contrib = float(df_daily["exchange_gap_profit"].sum())
+# --------------------------------------------------------------------------
+# TOPセクション: 左側 KPIサマリー / 右側 月別粗利・収支推移グラフ
+# --------------------------------------------------------------------------
+col_top_kpi, col_top_chart = st.columns([1, 1.4], gap="medium")
+
+with col_top_kpi:
     st.markdown(f"""
-    <div class="model-b-banner">
-        <span style="font-size: 20px;">⚡</span>
-        <div>
-            <strong>G数(IN枚数)連動モデル (ホール実務粗利) 稼働中</strong>: 
-            推定換金ギャップ利益は累計 <strong>{format_yen(gap_contrib)}</strong> です。
-            （客側の再投資・サンド投入による換金ギャップ利益が加味され、店舗の真の純利益を正確に算定しています）
+    <div class="kpi-grid-top">
+        <div class="kpi-card-top">
+            <div class="kpi-card-head">
+                <span>{'期間累計 ホール粗利' if is_hall else '期間累計 ユーザー収支'}</span>
+                <span class="kpi-card-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">💰</span>
+            </div>
+            <div class="kpi-card-value" style="color: {kpi_color_1}; font-size: 24px;">
+                {primary_total_str}
+            </div>
+            <div class="kpi-card-sub">
+                <span>{sub_total_str}</span>
+                <span>{total_months}ヶ月 ({days_count}日)</span>
+            </div>
+            <div class="kpi-card-foot">
+                <span style="color: #94a3b8;">1台あたり累計:</span>
+                <strong style="color: #ffffff;">{per_m_tot_str}</strong>
+            </div>
+        </div>
+
+        <div class="kpi-card-top">
+            <div class="kpi-card-head">
+                <span>{'月平均 ホール粗利' if is_hall else '月平均 ユーザー収支'}</span>
+                <span class="kpi-card-icon" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">📈</span>
+            </div>
+            <div class="kpi-card-value" style="color: {kpi_color_2}; font-size: 24px;">
+                {monthly_avg_str}<span style="font-size: 12px; font-weight: normal; color: #94a3b8; margin-left: 2px;">/月</span>
+            </div>
+            <div class="kpi-card-sub">
+                <span>台月: <strong style="color: #cbd5e1;">{pm_monthly_str}</strong></span>
+                <span>稼働 {avg_games_weighted:,.0f}G</span>
+            </div>
+            <div class="kpi-card-foot">
+                <span style="color: #94a3b8;">台日粗利:</span>
+                <strong style="color: #818cf8;">{pm_daily_str}</strong>
+            </div>
+        </div>
+
+        <div class="kpi-card-top">
+            <div class="kpi-card-head">
+                <span>{'最高利益月 (店黒字No.1)' if is_hall else '最高出玉月 (客勝ちNo.1)'}</span>
+                <span class="kpi-card-icon" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">🏆</span>
+            </div>
+            <div class="kpi-card-value" style="color: #ffffff; font-size: 22px;">
+                {best_ym}
+            </div>
+            <div class="kpi-card-sub">
+                <span style="color: #10b981; font-weight: 700;">{best_val}</span>
+                <span>{best_diff}</span>
+            </div>
+            <div class="kpi-card-foot">
+                <span style="color: #94a3b8;">台月:</span>
+                <strong style="color: #ffffff;">{best_pm}</strong>
+            </div>
+        </div>
+
+        <div class="kpi-card-top">
+            <div class="kpi-card-head">
+                <span>{'最大還元月 (店赤字No.1)' if is_hall else '最低収支月 (客負けNo.1)'}</span>
+                <span class="kpi-card-icon" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e;">📉</span>
+            </div>
+            <div class="kpi-card-value" style="color: #ffffff; font-size: 22px;">
+                {worst_ym}
+            </div>
+            <div class="kpi-card-sub">
+                <span style="color: #f43f5e; font-weight: 700;">{worst_val}</span>
+                <span>{worst_diff}</span>
+            </div>
+            <div class="kpi-card-foot">
+                <span style="color: #94a3b8;">台月:</span>
+                <strong style="color: #ffffff;">{worst_pm}</strong>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    if use_model_b:
+        gap_contrib = float(df_daily["exchange_gap_profit"].sum())
+        st.markdown(f"""
+        <div class="model-b-banner" style="margin-bottom: 0; padding: 10px 14px; font-size: 11px;">
+            <span style="font-size: 16px;">⚡</span>
+            <div>
+                <strong>G数連動実務粗利</strong>: 換金ギャップ利益累計 <strong>{format_yen(gap_contrib)}</strong> 算入済
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+with col_top_chart:
+    # 📊 月別粗利・収支推移グラフ (TOP右側に堂々配置！)
+    fig_top = go.Figure()
+
+    # バー色定義
+    bar_colors = [
+        ("#10b981" if v >= 0 else "#f43f5e") if is_hall else ("#38bdf8" if v >= 0 else "#f43f5e")
+        for v in df_m_table[val_col_name]
+    ]
+
+    # 単月利益バー
+    fig_top.add_trace(go.Bar(
+        x=df_m_table["year_month"],
+        y=df_m_table["利益_万円"],
+        name="単月利益 (万円)",
+        marker_color=bar_colors,
+        text=df_m_table["利益_万円"].apply(lambda v: f"{v:+.0f}万"),
+        textposition="outside",
+        hovertemplate="<b>%{x}</b><br>単月: %{y:+.1f}万円<extra></extra>"
+    ))
+
+    # 累計推移ライン (第2軸)
+    fig_top.add_trace(go.Scatter(
+        x=df_m_table["year_month"],
+        y=df_m_table["累計_万円"],
+        name="累計利益 (万円)",
+        mode="lines+markers",
+        line=dict(color="#fbbf24", width=2.5),
+        marker=dict(size=6, color="#fbbf24"),
+        yaxis="y2",
+        hovertemplate="累計: %{y:+.1f}万円<extra></extra>"
+    ))
+
+    fig_top.update_layout(
+        template="plotly_dark",
+        plot_bgcolor="#0f172a",
+        paper_bgcolor="#1e293b",
+        height=380,
+        margin=dict(l=10, r=10, t=35, b=10),
+        title=dict(
+            text=f"📊 月別{'ホール粗利' if is_hall else 'ユーザー収支'} & 累計推移 (単位: 万円)",
+            font=dict(size=13, color="#f8fafc")
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(size=11)
+        ),
+        yaxis=dict(
+            title="単月 (万円)",
+            showgrid=True,
+            gridcolor="#334155"
+        ),
+        yaxis2=dict(
+            title="累計 (万円)",
+            overlaying="y",
+            side="right",
+            showgrid=False
+        ),
+        xaxis=dict(
+            tickangle=-30,
+            showgrid=False
+        )
+    )
+    st.plotly_chart(fig_top, use_container_width=True)
 
 # --------------------------------------------------------------------------
 # メインタブ構成
 # --------------------------------------------------------------------------
 tab_monthly, tab_daily, tab_patterns, tab_dow, tab_tail, tab_comp, tab_export = st.tabs([
-    "📅 月別推移・回収ペース",
+    "📅 月別詳細集計表",
     "📋 日別詳細データ (全日)",
     "🎯 特日サイクル・パターン分析",
     "📆 曜日別分析",
@@ -1294,67 +1414,9 @@ tab_monthly, tab_daily, tab_patterns, tab_dow, tab_tail, tab_comp, tab_export = 
 ])
 
 # --------------------------------------------------------------------------
-# TAB 1: 月別推移・回収ペース分析
+# TAB 1: 月別詳細集計表
 # --------------------------------------------------------------------------
 with tab_monthly:
-    st.markdown("#### 📊 月別粗利・収支推移グラフ")
-
-    monthly_summary_list = []
-    for ym, grp in df_daily.groupby("year_month"):
-        days_c = len(grp)
-        p_tot = float(grp[display_val_col].sum())
-        d_avg_month = p_tot / days_c if days_c > 0 else 0
-        diff_tot = float(grp["total_diff_coins"].sum())
-        m_machines = float(grp["total_machines"].mean())
-        per_m_d = d_avg_month / m_machines if m_machines > 0 else 0
-        g_avg = float(grp["avg_games"].mean())
-        payout = (float(grp["out_coins"].sum()) / float(grp["in_coins"].sum()) * 100) if float(grp["in_coins"].sum()) > 0 else 100.0
-
-        sp_grp = grp[grp["is_special"]]
-        no_grp = grp[~grp["is_special"]]
-        sp_cnt = len(sp_grp)
-        no_cnt = len(no_grp)
-        sp_avg = float(sp_grp[display_val_col].sum() / sp_cnt) if sp_cnt > 0 else 0
-        no_avg = float(no_grp[display_val_col].sum() / no_cnt) if no_cnt > 0 else 0
-
-        monthly_summary_list.append({
-            "year_month": ym,
-            "営業日数": days_c,
-            "平均台数": round(m_machines),
-            "ホール粗利" if is_hall else "客収支": round(p_tot),
-            "1日平均": round(d_avg_month),
-            "全期間平均乖離": round(d_avg_month - daily_avg),
-            "台日あたり": round(per_m_d),
-            "総差枚数": round(diff_tot),
-            "出玉率": round(payout, 2),
-            "平均G数": round(g_avg),
-            "特日日数": sp_cnt,
-            "特日平均": round(sp_avg),
-            "通常日平均": round(no_avg),
-        })
-
-    df_m_table = pd.DataFrame(monthly_summary_list).sort_values("year_month", ascending=True)
-
-    val_col_name = "ホール粗利" if is_hall else "客収支"
-    fig_bar = px.bar(
-        df_m_table,
-        x="year_month",
-        y=val_col_name,
-        color=val_col_name,
-        color_continuous_scale=["#f43f5e", "#64748b", "#10b981"] if is_hall else ["#f43f5e", "#64748b", "#38bdf8"],
-        title=f"月別{'ホール粗利' if is_hall else 'ユーザー収支'} 推移 (単位: 円)",
-        text_auto=",.0f"
-    )
-    fig_bar.update_layout(
-        template="plotly_dark",
-        plot_bgcolor="#0f172a",
-        paper_bgcolor="#1e293b",
-        height=360,
-        margin=dict(l=20, r=20, t=40, b=20),
-        coloraxis_showscale=False
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
-
     st.markdown("#### 📋 月別詳細集計表")
     df_m_disp = df_m_table.sort_values("year_month", ascending=False).copy()
     st.dataframe(
