@@ -23,7 +23,7 @@ import { BarChart3, LineChart as LineChartIcon, Activity, SplitSquareVertical } 
 interface ProfitChartProps {
   monthlyStats: MonthlyStat[];
   perspective: 'hall' | 'player';
-  unit: 'yen' | 'coins' | 'avgDiff';
+  unit: 'yen' | 'coins' | 'avgDiff' | 'payoutRate';
   profitModel?: any;
   onSelectMonth?: (yearMonth: string) => void;
 }
@@ -61,6 +61,11 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
         // Under G-count model, coins are identical to diff coins
         gModelVal = Math.round(m.hallCoinProfit / 10000);
         gModelCumVal = Math.round(m.cumHallCoinProfit / 10000);
+      } else if (unit === 'payoutRate') {
+        diffVal = Math.round((m.avgPayoutRate || 100) * 100) / 100;
+        diffCumVal = 0;
+        gModelVal = Math.round((m.avgPayoutRate || 100) * 100) / 100;
+        gModelCumVal = 0;
       } else {
         diffVal = -m.avgDiffCoins;
         diffCumVal = 0;
@@ -80,6 +85,11 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
 
         gModelVal = Math.round(m.playerCoinProfit / 10000);
         gModelCumVal = Math.round(m.cumPlayerCoinProfit / 10000);
+      } else if (unit === 'payoutRate') {
+        diffVal = Math.round((m.avgPayoutRate || 100) * 100) / 100;
+        diffCumVal = 0;
+        gModelVal = Math.round((m.avgPayoutRate || 100) * 100) / 100;
+        gModelCumVal = 0;
       } else {
         diffVal = m.avgDiffCoins;
         diffCumVal = 0;
@@ -103,7 +113,7 @@ export const ProfitChart: React.FC<ProfitChartProps> = ({
     };
   });
 
-  const unitLabel = unit === 'yen' ? '万円' : unit === 'coins' ? '万枚' : '枚/台';
+  const unitLabel = unit === 'yen' ? '万円' : unit === 'coins' ? '万枚' : unit === 'payoutRate' ? '%' : '枚/台';
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {

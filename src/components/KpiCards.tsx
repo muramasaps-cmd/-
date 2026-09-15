@@ -6,7 +6,7 @@ import { TrendingUp, TrendingDown, DollarSign, CalendarCheck, Zap, Award, Calcul
 interface KpiCardsProps {
   monthlyStats: MonthlyStat[];
   perspective: 'hall' | 'player';
-  unit: 'yen' | 'coins' | 'avgDiff';
+  unit: 'yen' | 'coins' | 'avgDiff' | 'payoutRate';
   profitModel?: any;
 }
 
@@ -88,6 +88,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
   const formatVal = (num: number) => {
     if (unit === 'yen') return formatYen(num);
     if (unit === 'coins') return formatCoins(num);
+    if (unit === 'payoutRate') return `${num.toFixed(2)}%`;
     const sign = num > 0 ? '+' : '';
     return `${sign}${num}枚/台`;
   };

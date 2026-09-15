@@ -26,7 +26,7 @@ import {
 interface SpecialDayPatternsProps {
   dailyRecords: DailyRecord[];
   perspective: 'hall' | 'player';
-  unit: 'yen' | 'coins' | 'avgDiff';
+  unit: 'yen' | 'coins' | 'avgDiff' | 'payoutRate';
   specialDayRules?: SpecialDayRules;
   oldEventDays?: string;
   onSelectMonth?: (yearMonth: string) => void;

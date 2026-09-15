@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { StoreProfile, MonthlyStat, DailyRecord } from './data/types';
-import { Header, ProfitModelType } from './components/Header';
+import { Header, ProfitModelType, UnitMode } from './components/Header';
 import { KpiCards } from './components/KpiCards';
 import { ModelComparisonBanner } from './components/ModelComparisonBanner';
 import { ProfitChart } from './components/ProfitChart';
@@ -57,7 +57,7 @@ export default function App() {
   }, [stores, activeStoreIdState]);
 
   const [perspective, setPerspective] = useState<'hall' | 'player'>('hall');
-  const [unit, setUnit] = useState<'yen' | 'coins' | 'avgDiff'>('yen');
+  const [unit, setUnit] = useState<UnitMode>('yen');
   const [profitModel, setProfitModel] = useState<ProfitModelType>('gCount');
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonthModal, setSelectedMonthModal] = useState<string | null>(null);
@@ -452,13 +452,13 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 flex-1">
-        {/* Top Controls Bar with Store Switcher & HTML Import button */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+        {/* Top Controls Bar with Store Switcher & HTML Import button (Single-line 1-row layout) */}
+        <div className="flex items-center justify-between gap-2.5 bg-white px-3 py-2 rounded-xl border border-slate-200/80 shadow-2xs overflow-x-auto whitespace-nowrap">
           {/* Store Switcher Quick Dropdown & Period */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 px-2.5 py-1 rounded-lg">
-              <Building2 className="w-4 h-4 text-amber-500" />
-              <span className="text-xs text-slate-500 font-medium">分析店舗:</span>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-300 px-2.5 py-1 rounded-lg shrink-0">
+              <Building2 className="w-4 h-4 text-amber-500 shrink-0" />
+              <span className="text-xs text-slate-500 font-medium whitespace-nowrap">分析店舗:</span>
               <select
                 value={activeStoreIdState}
                 onChange={(e) => handleSelectStore(e.target.value)}
@@ -475,14 +475,14 @@ export default function App() {
             <button
               type="button"
               onClick={() => setIsStoreModalOpen(true)}
-              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-2xs shrink-0 whitespace-nowrap"
             >
               <UploadCloud className="w-3.5 h-3.5" />
               HTML取込 / 他店舗追加
             </button>
 
-            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-700">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="flex items-center gap-2 text-xs text-slate-700 shrink-0 whitespace-nowrap">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
               <span>
                 集計対象:{' '}
                 <span className="text-amber-700 font-bold">
@@ -495,11 +495,11 @@ export default function App() {
           </div>
 
           {/* Rate & Parameter Toggle Button & Reset Button */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setShowSettings(!showSettings)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
                 showSettings || rateLend !== currentStore.rateLend || rateExchange !== currentStore.rateExchange
                   ? 'bg-amber-500 text-slate-950 shadow-xs'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -514,11 +514,11 @@ export default function App() {
             <button
               type="button"
               onClick={() => setIsResetConfirmOpen(true)}
-              className="px-2.5 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
               title="初期状態にリセット（全店舗削除）"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">リセット (全店舗削除)</span>
+              <span>リセット (全店舗削除)</span>
             </button>
           </div>
         </div>
@@ -693,6 +693,7 @@ export default function App() {
           dailyRecords={filteredDailyRecords}
           perspective={perspective}
           unit={unit}
+          setUnit={setUnit}
           oldEventDays={currentStore.oldEventDays}
           specialDayRules={currentStore.specialDayRules}
         />
@@ -702,6 +703,7 @@ export default function App() {
           dailyRecords={filteredDailyRecords}
           perspective={perspective}
           unit={unit}
+          setUnit={setUnit}
           oldEventDays={currentStore.oldEventDays}
           specialDayRules={currentStore.specialDayRules}
         />

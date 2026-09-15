@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { DailyRecord } from '../data/types';
 import { formatYen, formatCoins, formatNumber } from '../utils/formatters';
+import { UnitMode } from './Header';
 import {
   CalendarDays,
   Flame,
@@ -9,6 +10,9 @@ import {
   BarChart2,
   ChevronDown,
   ChevronUp,
+  Trophy,
+  Coins,
+  Percent,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -28,7 +32,8 @@ type TailIdentifier = number | 'zoro';
 interface TailNumberAnalysisProps {
   dailyRecords: DailyRecord[];
   perspective: 'hall' | 'player';
-  unit: 'yen' | 'coins' | 'avgDiff';
+  unit: UnitMode;
+  setUnit?: (u: UnitMode) => void;
   oldEventDays?: string;
   specialDayRules?: any;
   onSelectDate?: (date: string) => void;
@@ -38,13 +43,13 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
   dailyRecords,
   perspective,
   unit,
+  setUnit,
   oldEventDays = '',
   specialDayRules,
 }) => {
   const [expandedTail, setExpandedTail] = useState<TailIdentifier | null>(null);
-  const [sortField, setSortField] = useState<'tail' | 'avgDiffCoins' | 'hallYen' | 'avgGames' | 'payoutRate' | 'winRate' | 'rank'>('tail');
+  const [sortField, setSortField] = useState<'rank' | 'tail' | 'avgDiffCoins' | 'hallYen' | 'avgGames' | 'payoutRate' | 'winRate'>('rank');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [chartMetric, setChartMetric] = useState<'avgDiffCoins' | 'dailyProfit' | 'payoutRate'>('avgDiffCoins');
   const isHall = perspective === 'hall';
 
   // Check which tail is designated as a store event day
@@ -144,6 +149,7 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
       const perMachineDailyPlayerProfit = avgMachines > 0 ? Math.round(dailyPlayerProfit / avgMachines) : 0;
 
       const displayDiffCoins = perspective === 'hall' ? Math.round(-avgDiffCoins * 10) / 10 : avgDiffCoins;
+      const displayTotalCoins = perspective === 'hall' ? -totalDiffCoins : totalDiffCoins;
       const displayDailyProfit = perspective === 'hall' ? dailyHallProfit : dailyPlayerProfit;
       const displayTotalProfit = perspective === 'hall' ? totalHallProfit : totalPlayerProfit;
       const displayPerMachineDailyProfit = perspective === 'hall' ? perMachineDailyProfit : perMachineDailyPlayerProfit;
@@ -163,6 +169,7 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
         totalDiffCoins,
         avgDiffCoins,
         displayDiffCoins,
+        displayTotalCoins,
         displayDailyProfit,
         displayTotalProfit,
         displayPerMachineDailyProfit,
@@ -180,13 +187,52 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
   // Add player & hall rankings
   const rankedTailStats = useMemo(() => {
     if (!tailStats.length) return [];
-    const playerSorted = [...tailStats].sort((a, b) => b.avgDiffCoins - a.avgDiffCoins);
+    // Only rank tails with actual records (count > 0)
+    const validStats = tailStats.filter((t) => t.count > 0);
+
+    const playerSorted = [...validStats].sort((a, b) => {
+      if (unit === 'yen') {
+        if (b.dailyPlayerProfit !== a.dailyPlayerProfit) return b.dailyPlayerProfit - a.dailyPlayerProfit;
+        if (b.avgDiffCoins !== a.avgDiffCoins) return b.avgDiffCoins - a.avgDiffCoins;
+        return b.payoutRate - a.payoutRate;
+      } else if (unit === 'coins') {
+        if (b.totalDiffCoins !== a.totalDiffCoins) return b.totalDiffCoins - a.totalDiffCoins;
+        if (b.avgDiffCoins !== a.avgDiffCoins) return b.avgDiffCoins - a.avgDiffCoins;
+        return b.payoutRate - a.payoutRate;
+      } else if (unit === 'payoutRate') {
+        if (b.payoutRate !== a.payoutRate) return b.payoutRate - a.payoutRate;
+        if (b.avgDiffCoins !== a.avgDiffCoins) return b.avgDiffCoins - a.avgDiffCoins;
+        return b.dailyPlayerProfit - a.dailyPlayerProfit;
+      } else {
+        if (b.avgDiffCoins !== a.avgDiffCoins) return b.avgDiffCoins - a.avgDiffCoins;
+        if (b.payoutRate !== a.payoutRate) return b.payoutRate - a.payoutRate;
+        return b.dailyPlayerProfit - a.dailyPlayerProfit;
+      }
+    });
     const playerRankMap = new Map<TailIdentifier, number>();
     playerSorted.forEach((t, idx) => {
       playerRankMap.set(t.tail, idx + 1);
     });
 
-    const hallSorted = [...tailStats].sort((a, b) => b.dailyHallProfit - a.dailyHallProfit);
+    const hallSorted = [...validStats].sort((a, b) => {
+      if (unit === 'yen') {
+        if (b.dailyHallProfit !== a.dailyHallProfit) return b.dailyHallProfit - a.dailyHallProfit;
+        if (a.avgDiffCoins !== b.avgDiffCoins) return a.avgDiffCoins - b.avgDiffCoins;
+        return b.payoutRate - a.payoutRate;
+      } else if (unit === 'coins') {
+        if (a.totalDiffCoins !== b.totalDiffCoins) return a.totalDiffCoins - b.totalDiffCoins;
+        if (a.avgDiffCoins !== b.avgDiffCoins) return a.avgDiffCoins - b.avgDiffCoins;
+        return b.payoutRate - a.payoutRate;
+      } else if (unit === 'payoutRate') {
+        if (a.payoutRate !== b.payoutRate) return a.payoutRate - b.payoutRate;
+        if (a.avgDiffCoins !== b.avgDiffCoins) return a.avgDiffCoins - b.avgDiffCoins;
+        return b.dailyHallProfit - a.dailyHallProfit;
+      } else {
+        if (a.avgDiffCoins !== b.avgDiffCoins) return a.avgDiffCoins - b.avgDiffCoins;
+        if (b.dailyHallProfit !== a.dailyHallProfit) return b.dailyHallProfit - a.dailyHallProfit;
+        return a.payoutRate - b.payoutRate;
+      }
+    });
     const hallRankMap = new Map<TailIdentifier, number>();
     hallSorted.forEach((t, idx) => {
       hallRankMap.set(t.tail, idx + 1);
@@ -197,7 +243,30 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
       rankPlayer: playerRankMap.get(t.tail) || 0,
       rankHall: hallRankMap.get(t.tail) || 0,
     }));
-  }, [tailStats]);
+  }, [tailStats, unit]);
+
+  // TOP 3 and Worst 3 based on current perspective
+  const { top3, worst3 } = useMemo(() => {
+    const valid = rankedTailStats.filter((t) => t.count > 0);
+    if (valid.length === 0) return { top3: [], worst3: [] };
+
+    // Sort ascending by current perspective rank (1位, 2位, 3位...)
+    const sortedByRank = [...valid].sort((a, b) => {
+      const rankA = perspective === 'hall' ? a.rankHall : a.rankPlayer;
+      const rankB = perspective === 'hall' ? b.rankHall : b.rankPlayer;
+      return rankA - rankB;
+    });
+
+    const top = sortedByRank.slice(0, 3);
+    const reversed = [...sortedByRank].reverse();
+    // For worst 3: lowest ranked items (worst 1 is the absolute bottom rank)
+    const worstPool = valid.length > 3
+      ? reversed.filter((item) => !top.some((t) => t.tail === item.tail))
+      : reversed;
+    const worst = worstPool.slice(0, 3);
+
+    return { top3: top, worst3: worst };
+  }, [rankedTailStats, perspective]);
 
   // Sorted list for table
   const sortedTails = useMemo(() => {
@@ -212,6 +281,9 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
       else if (sortField === 'rank') {
         const rankA = perspective === 'hall' ? a.rankHall : a.rankPlayer;
         const rankB = perspective === 'hall' ? b.rankHall : b.rankPlayer;
+        // Non-ranked items (count === 0) go to bottom
+        if (rankA === 0 && rankB !== 0) return 1;
+        if (rankB === 0 && rankA !== 0) return -1;
         diff = rankA - rankB;
       }
       else if (sortField === 'avgDiffCoins') {
@@ -238,7 +310,7 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
       setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
-      setSortOrder(field === 'tail' ? 'asc' : 'desc');
+      setSortOrder(field === 'tail' || field === 'rank' ? 'asc' : 'desc');
     }
   };
 
@@ -375,39 +447,52 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
           </p>
         </div>
 
-        {/* Chart Metric Selector */}
+        {/* Unit & Metric Selector (Unified with Header & Synchronized) */}
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg self-start sm:self-auto text-xs">
           <button
             type="button"
-            onClick={() => setChartMetric('avgDiffCoins')}
+            onClick={() => setUnit?.('yen')}
             className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-              chartMetric === 'avgDiffCoins'
-                ? 'bg-white text-indigo-700 shadow-xs'
+              unit === 'yen'
+                ? 'bg-white text-indigo-700 shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {isHall ? 'ホール平均差枚' : '客平均差枚'}
+            円表記
           </button>
           <button
             type="button"
-            onClick={() => setChartMetric('dailyProfit')}
-            className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-              chartMetric === 'dailyProfit'
-                ? 'bg-white text-indigo-700 shadow-xs'
+            onClick={() => setUnit?.('coins')}
+            className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+              unit === 'coins'
+                ? 'bg-white text-indigo-700 shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {isHall ? '1日平均粗利' : '1日平均客収支'}
+            <Coins className="w-3 h-3" />
+            枚数表記
           </button>
           <button
             type="button"
-            onClick={() => setChartMetric('payoutRate')}
+            onClick={() => setUnit?.('avgDiff')}
             className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-              chartMetric === 'payoutRate'
-                ? 'bg-white text-indigo-700 shadow-xs'
+              unit === 'avgDiff'
+                ? 'bg-white text-indigo-700 shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
+            台平均
+          </button>
+          <button
+            type="button"
+            onClick={() => setUnit?.('payoutRate')}
+            className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+              unit === 'payoutRate'
+                ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Percent className="w-3 h-3" />
             出玉率(機械割)
           </button>
         </div>
@@ -432,8 +517,9 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                 tick={{ fontSize: 11, fill: '#64748b' }}
                 axisLine={{ stroke: '#cbd5e1' }}
                 tickFormatter={(val) => {
-                  if (chartMetric === 'avgDiffCoins') return `${val > 0 ? '+' : ''}${val}`;
-                  if (chartMetric === 'dailyProfit') return `${(val / 10000).toFixed(0)}万`;
+                  if (unit === 'yen') return `${(val / 10000).toFixed(0)}万`;
+                  if (unit === 'coins') return `${val > 0 ? '+' : ''}${(val / 10000).toFixed(0)}万枚`;
+                  if (unit === 'avgDiff') return `${val > 0 ? '+' : ''}${val}`;
                   return `${val}%`;
                 }}
               />
@@ -446,28 +532,34 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                 tickFormatter={(val) => `${val}G`}
               />
               <Tooltip content={<CustomChartTooltip />} />
-              <ReferenceLine yAxisId="left" y={chartMetric === 'payoutRate' ? 100 : 0} stroke="#94a3b8" strokeDasharray="3 3" />
+              <ReferenceLine yAxisId="left" y={unit === 'payoutRate' ? 100 : 0} stroke="#94a3b8" strokeDasharray="3 3" />
               
               <Bar
                 yAxisId="left"
                 dataKey={
-                  chartMetric === 'avgDiffCoins'
-                    ? 'displayDiffCoins'
-                    : chartMetric === 'dailyProfit'
+                  unit === 'yen'
                     ? 'displayDailyProfit'
+                    : unit === 'coins'
+                    ? 'displayTotalCoins'
+                    : unit === 'avgDiff'
+                    ? 'displayDiffCoins'
                     : 'payoutRate'
                 }
                 radius={[4, 4, 0, 0]}
               >
                 {tailStats.map((entry, index) => {
                   let fillColor = '#6366f1';
-                  if (chartMetric === 'avgDiffCoins') {
-                    fillColor = entry.displayDiffCoins > 0
-                      ? isHall ? '#818cf8' : '#3b82f6'
-                      : '#f43f5e';
-                  } else if (chartMetric === 'dailyProfit') {
+                  if (unit === 'yen') {
                     fillColor = entry.displayDailyProfit >= 0
                       ? isHall ? '#10b981' : '#3b82f6'
+                      : '#f43f5e';
+                  } else if (unit === 'coins') {
+                    fillColor = entry.displayTotalCoins >= 0
+                      ? isHall ? '#10b981' : '#3b82f6'
+                      : '#f43f5e';
+                  } else if (unit === 'avgDiff') {
+                    fillColor = entry.displayDiffCoins > 0
+                      ? isHall ? '#818cf8' : '#3b82f6'
                       : '#f43f5e';
                   } else {
                     fillColor = entry.payoutRate >= 100 ? '#10b981' : '#f43f5e';
@@ -497,42 +589,479 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
         </div>
       </div>
 
+      {/* TOP 3 & ワースト 3 Ranking Section */}
+      <div className="p-5 border-b border-slate-100 bg-slate-50/60">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3.5">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-amber-500" />
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span>
+                {isHall
+                  ? unit === 'yen'
+                    ? '【ホール目線】粗利(円) TOP 3 ＆ ワースト 3'
+                    : unit === 'coins'
+                    ? '【ホール目線】店総差枚(枚) TOP 3 ＆ ワースト 3'
+                    : unit === 'avgDiff'
+                    ? '【ホール目線】店平均差枚(枚/台) TOP 3 ＆ ワースト 3'
+                    : '【ホール目線】低出玉率(利益貢献) TOP 3 ＆ ワースト 3'
+                  : unit === 'yen'
+                    ? '【客目線】収支(円) TOP 3 ＆ ワースト 3'
+                    : unit === 'coins'
+                    ? '【客目線】総出玉差枚(枚) TOP 3 ＆ ワースト 3'
+                    : unit === 'avgDiff'
+                    ? '【客目線】客平均差枚(枚/台) TOP 3 ＆ ワースト 3'
+                    : '【客目線】高出玉率(機械割) TOP 3 ＆ ワースト 3'}
+              </span>
+            </h3>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Unit Switcher */}
+            <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setUnit?.('yen')}
+                className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                  unit === 'yen'
+                    ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                円表記
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnit?.('coins')}
+                className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                  unit === 'coins'
+                    ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Coins className="w-3 h-3" />
+                枚数表記
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnit?.('avgDiff')}
+                className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                  unit === 'avgDiff'
+                    ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                台平均
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnit?.('payoutRate')}
+                className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                  unit === 'payoutRate'
+                    ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Percent className="w-3 h-3" />
+                出玉率
+              </button>
+            </div>
+
+            <span className="text-xs text-slate-500 hidden md:inline">
+              {isHall
+                ? unit === 'yen'
+                  ? '※ ホール粗利の利益貢献度順（TOP）と還元順（ワースト）'
+                  : unit === 'coins'
+                  ? '※ 店側回収差枚の高い順（TOP）と放出・客勝ち順（ワースト）'
+                  : unit === 'avgDiff'
+                  ? '※ 店側回収平均差枚の高い順（TOP）と放出順（ワースト）'
+                  : '※ 低出玉率（利益貢献度高）順（TOP）と高出玉率順（ワースト）'
+                : unit === 'yen'
+                  ? '※ プレイヤー1日平均収支の高い順（TOP）と厳しい順（ワースト）'
+                  : unit === 'coins'
+                  ? '※ プレイヤー総出玉差枚の高い順（TOP）と厳しい順（ワースト）'
+                  : unit === 'avgDiff'
+                  ? '※ プレイヤー平均差枚の高い順（TOP）と厳しい順（ワースト）'
+                  : '※ 機械割・出玉率の高い順（TOP）と厳しい順（ワースト）'}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* TOP 3 Card */}
+          <div className="bg-white rounded-xl border border-emerald-200/90 shadow-xs overflow-hidden flex flex-col">
+            <div className="px-4 py-2.5 bg-gradient-to-r from-emerald-50 to-teal-50/60 border-b border-emerald-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-600 text-white text-xs font-black shadow-xs">
+                  ★
+                </span>
+                <span className="text-xs font-bold text-emerald-950">
+                  {isHall
+                    ? unit === 'yen'
+                      ? '利益貢献 TOP 3 (高粗利・回収日)'
+                      : unit === 'coins'
+                      ? '回収差枚 TOP 3 (店総差枚プラス日)'
+                      : unit === 'avgDiff'
+                      ? '店平均差枚 TOP 3 (店差枚プラス日)'
+                      : '利益貢献 TOP 3 (低出玉率日)'
+                    : unit === 'yen'
+                      ? '収支還元 TOP 3 (高収支・出玉上位)'
+                      : unit === 'coins'
+                      ? '出玉還元 TOP 3 (総差枚上位)'
+                      : unit === 'avgDiff'
+                      ? '台平均還元 TOP 3 (客平均差枚上位)'
+                      : '高出玉率 TOP 3 (機械割上位)'}
+                </span>
+              </div>
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                {isHall
+                  ? unit === 'yen' ? '粗利高水準' : unit === 'coins' ? '店差枚高' : unit === 'avgDiff' ? '平均店差枚高' : '低出玉率'
+                  : unit === 'yen' ? '高収支待遇' : unit === 'coins' ? '総差枚上位' : unit === 'avgDiff' ? '還元・好待遇' : '高機械割'}
+              </span>
+            </div>
+
+            <div className="divide-y divide-slate-100 flex-1">
+              {top3.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400">データがありません</div>
+              ) : (
+                top3.map((item) => {
+                  const rank = isHall ? item.rankHall : item.rankPlayer;
+                  const rankBadgeStyle =
+                    rank === 1
+                      ? 'bg-amber-400 text-slate-950 shadow-xs font-black'
+                      : rank === 2
+                      ? 'bg-slate-200 text-slate-800 font-bold'
+                      : 'bg-amber-100 text-amber-900 border border-amber-300 font-bold';
+                  const medalEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉';
+
+                  return (
+                    <div
+                      key={`tail-top-${item.tail}`}
+                      onClick={() => toggleExpand(item.tail)}
+                      className="p-3 sm:px-4 hover:bg-emerald-50/30 transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`px-2 py-0.5 rounded text-xs shrink-0 flex items-center gap-1 ${rankBadgeStyle}`}>
+                          <span>{medalEmoji}</span>
+                          <span>{rank}位</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-900 text-sm">{item.label}</span>
+                            {item.isStoreEvent && (
+                              <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded">
+                                特日
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                            <span>{item.sampleDays}</span>
+                            <span>•</span>
+                            <span>{item.count}日</span>
+                            <span>•</span>
+                            <span>{formatNumber(item.avgGames)}G</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 sm:gap-4 shrink-0 sm:text-right">
+                        <div>
+                          <div className="text-[10px] text-slate-400">
+                            {unit === 'yen'
+                              ? isHall ? '1日平均粗利' : '1日平均客収支'
+                              : unit === 'coins'
+                              ? isHall ? '店総差枚' : '客総差枚'
+                              : unit === 'avgDiff'
+                              ? isHall ? '店平均差枚/台' : '客平均差枚/台'
+                              : '出玉率(機械割)'}
+                          </div>
+                          <div className={`text-sm font-black ${
+                            unit === 'yen'
+                              ? item.displayDailyProfit >= 0
+                                ? isHall ? 'text-emerald-600' : 'text-blue-600'
+                                : 'text-rose-600'
+                              : unit === 'coins'
+                              ? item.displayTotalCoins >= 0
+                                ? isHall ? 'text-emerald-600' : 'text-blue-600'
+                                : 'text-rose-600'
+                              : unit === 'avgDiff'
+                              ? item.displayDiffCoins > 0
+                                ? isHall ? 'text-indigo-600' : 'text-blue-600'
+                                : 'text-rose-600'
+                              : item.payoutRate >= 100
+                              ? 'text-emerald-600'
+                              : 'text-rose-600'
+                          }`}>
+                            {unit === 'yen'
+                              ? formatYen(item.displayDailyProfit)
+                              : unit === 'coins'
+                              ? formatCoins(item.displayTotalCoins)
+                              : unit === 'avgDiff'
+                              ? `${item.displayDiffCoins > 0 ? '+' : ''}${item.displayDiffCoins}枚/台`
+                              : `${item.payoutRate.toFixed(2)}%`}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            {unit === 'yen'
+                              ? `${isHall ? '店差枚' : '客差枚'}: ${item.displayDiffCoins > 0 ? '+' : ''}${item.displayDiffCoins}枚/台`
+                              : `${isHall ? '粗利換算' : '収支換算'}: ${formatYen(item.displayDailyProfit)}`}
+                          </div>
+                        </div>
+
+                        <div className="pl-3 border-l border-slate-200 text-left sm:text-right min-w-[70px]">
+                          <div className="text-[10px] text-slate-400">出玉率 / 勝率</div>
+                          <div className={`text-xs font-bold ${item.payoutRate >= 100 ? 'text-emerald-700' : 'text-slate-700'}`}>
+                            {item.payoutRate.toFixed(2)}%
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            勝率 {item.playerWinRate}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Worst 3 Card */}
+          <div className="bg-white rounded-xl border border-rose-200/90 shadow-xs overflow-hidden flex flex-col">
+            <div className="px-4 py-2.5 bg-gradient-to-r from-rose-50 to-orange-50/60 border-b border-rose-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-600 text-white text-xs font-black shadow-xs">
+                  ▼
+                </span>
+                <span className="text-xs font-bold text-rose-950">
+                  {isHall
+                    ? unit === 'yen'
+                      ? '粗利 ワースト 3 (還元・赤字傾向)'
+                      : unit === 'coins'
+                      ? '店差枚 ワースト 3 (客プラス・放出日)'
+                      : unit === 'avgDiff'
+                      ? '平均差枚 ワースト 3 (客プラス・放出日)'
+                      : '出玉率 ワースト 3 (高出玉率・赤字日)'
+                    : unit === 'yen'
+                      ? '収支 ワースト 3 (マイナス・回収日)'
+                      : unit === 'coins'
+                      ? '総差枚 ワースト 3 (客マイナス・回収日)'
+                      : unit === 'avgDiff'
+                      ? '出玉 ワースト 3 (回収・低勝率日)'
+                      : '出玉率 ワースト 3 (低設定・回収傾向)'}
+                </span>
+              </div>
+              <span className="text-[11px] font-bold text-rose-700 bg-rose-100/70 px-2 py-0.5 rounded-full">
+                {isHall
+                  ? unit === 'yen' ? '薄利・還元' : unit === 'coins' ? '放出・還元' : unit === 'avgDiff' ? '客勝ち還元' : '高出玉還元'
+                  : unit === 'yen' ? '客マイナス大' : unit === 'coins' ? '客マイナス大' : unit === 'avgDiff' ? '回収警戒日' : '低出玉警戒'}
+              </span>
+            </div>
+
+            <div className="divide-y divide-slate-100 flex-1">
+              {worst3.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400">データがありません</div>
+              ) : (
+                worst3.map((item, idx) => {
+                  const overallRank = isHall ? item.rankHall : item.rankPlayer;
+                  const worstBadgeStyle =
+                    idx === 0
+                      ? 'bg-rose-500 text-white shadow-xs font-black'
+                      : idx === 1
+                      ? 'bg-rose-100 text-rose-800 border border-rose-200 font-bold'
+                      : 'bg-rose-50 text-rose-700 border border-rose-200 font-medium';
+
+                  return (
+                    <div
+                      key={`tail-worst-${item.tail}`}
+                      onClick={() => toggleExpand(item.tail)}
+                      className="p-3 sm:px-4 hover:bg-rose-50/30 transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`px-2 py-0.5 rounded text-xs shrink-0 flex flex-col items-center justify-center min-w-16 ${worstBadgeStyle}`}>
+                          <span>ワースト{idx + 1}位</span>
+                          <span className="text-[9px] opacity-80">({overallRank}位)</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-900 text-sm">{item.label}</span>
+                            {item.isStoreEvent && (
+                              <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded">
+                                特日
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                            <span>{item.sampleDays}</span>
+                            <span>•</span>
+                            <span>{item.count}日</span>
+                            <span>•</span>
+                            <span>{formatNumber(item.avgGames)}G</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 sm:gap-4 shrink-0 sm:text-right">
+                        <div>
+                          <div className="text-[10px] text-slate-400">
+                            {unit === 'yen'
+                              ? isHall ? '1日平均粗利' : '1日平均客収支'
+                              : unit === 'coins'
+                              ? isHall ? '店総差枚' : '客総差枚'
+                              : unit === 'avgDiff'
+                              ? isHall ? '店平均差枚/台' : '客平均差枚/台'
+                              : '出玉率(機械割)'}
+                          </div>
+                          <div className={`text-sm font-black ${
+                            unit === 'yen'
+                              ? item.displayDailyProfit >= 0
+                                ? isHall ? 'text-emerald-600' : 'text-blue-600'
+                                : 'text-rose-600'
+                              : unit === 'coins'
+                              ? item.displayTotalCoins >= 0
+                                ? isHall ? 'text-emerald-600' : 'text-blue-600'
+                                : 'text-rose-600'
+                              : unit === 'avgDiff'
+                              ? item.displayDiffCoins > 0
+                                ? isHall ? 'text-indigo-600' : 'text-blue-600'
+                                : 'text-rose-600'
+                              : item.payoutRate >= 100
+                              ? 'text-emerald-600'
+                              : 'text-rose-600'
+                          }`}>
+                            {unit === 'yen'
+                              ? formatYen(item.displayDailyProfit)
+                              : unit === 'coins'
+                              ? formatCoins(item.displayTotalCoins)
+                              : unit === 'avgDiff'
+                              ? `${item.displayDiffCoins > 0 ? '+' : ''}${item.displayDiffCoins}枚/台`
+                              : `${item.payoutRate.toFixed(2)}%`}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            {unit === 'yen'
+                              ? `${isHall ? '店差枚' : '客差枚'}: ${item.displayDiffCoins > 0 ? '+' : ''}${item.displayDiffCoins}枚/台`
+                              : `${isHall ? '粗利換算' : '収支換算'}: ${formatYen(item.displayDailyProfit)}`}
+                          </div>
+                        </div>
+
+                        <div className="pl-3 border-l border-slate-200 text-left sm:text-right min-w-[70px]">
+                          <div className="text-[10px] text-slate-400">出玉率 / 勝率</div>
+                          <div className={`text-xs font-bold ${item.payoutRate >= 100 ? 'text-emerald-700' : 'text-slate-700'}`}>
+                            {item.payoutRate.toFixed(2)}%
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            勝率 {item.playerWinRate}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Detail Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-xs text-left text-slate-700">
           <thead className="text-[11px] text-slate-500 bg-slate-50/80 uppercase border-b border-slate-200/80">
             <tr>
-              <th className="px-4 py-3 font-bold cursor-pointer hover:bg-slate-100" onClick={() => handleSort('tail')}>
-                末尾区分
+              <th className="px-3 py-3 font-bold text-center whitespace-nowrap">詳細展開</th>
+              <th className="px-3 py-3 font-bold cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort('rank')}>
+                <div className="flex items-center justify-center gap-1">
+                  <span>順位</span>
+                  {sortField === 'rank' && (
+                    <span className="text-[10px] text-indigo-600">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                  )}
+                </div>
               </th>
-              <th className="px-3 py-3 font-bold cursor-pointer hover:bg-slate-100" onClick={() => handleSort('rank')}>
-                順位
+              <th className="px-4 py-3 font-bold cursor-pointer hover:bg-slate-100" onClick={() => handleSort('tail')}>
+                <div className="flex items-center gap-1">
+                  <span>末尾区分</span>
+                  {sortField === 'tail' && (
+                    <span className="text-[10px] text-indigo-600">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                  )}
+                </div>
               </th>
               <th className="px-3 py-3 font-bold text-right cursor-pointer hover:bg-slate-100" onClick={() => handleSort('avgDiffCoins')}>
-                {isHall ? '店平均差枚' : '客平均差枚'}
+                <div className="flex items-center justify-end gap-1">
+                  <span>{isHall ? '店平均差枚' : '客平均差枚'}</span>
+                  {sortField === 'avgDiffCoins' && (
+                    <span className="text-[10px] text-indigo-600">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                  )}
+                </div>
               </th>
               <th className="px-3 py-3 font-bold text-right cursor-pointer hover:bg-slate-100" onClick={() => handleSort('hallYen')}>
-                {isHall ? '1日平均粗利' : '1日平均客収支'}
+                <div className="flex items-center justify-end gap-1">
+                  <span>{isHall ? '1日平均粗利' : '1日平均客収支'}</span>
+                  {sortField === 'hallYen' && (
+                    <span className="text-[10px] text-indigo-600">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                  )}
+                </div>
               </th>
               <th className="px-3 py-3 font-bold text-right cursor-pointer hover:bg-slate-100" onClick={() => handleSort('avgGames')}>
-                平均稼働G
+                <div className="flex items-center justify-end gap-1">
+                  <span>平均稼働G</span>
+                  {sortField === 'avgGames' && (
+                    <span className="text-[10px] text-indigo-600">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                  )}
+                </div>
               </th>
               <th className="px-3 py-3 font-bold text-right cursor-pointer hover:bg-slate-100" onClick={() => handleSort('payoutRate')}>
-                機械割
+                <div className="flex items-center justify-end gap-1">
+                  <span>機械割</span>
+                  {sortField === 'payoutRate' && (
+                    <span className="text-[10px] text-indigo-600">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                  )}
+                </div>
               </th>
               <th className="px-3 py-3 font-bold text-right cursor-pointer hover:bg-slate-100" onClick={() => handleSort('winRate')}>
-                客勝率
+                <div className="flex items-center justify-end gap-1">
+                  <span>客勝率</span>
+                  {sortField === 'winRate' && (
+                    <span className="text-[10px] text-indigo-600">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                  )}
+                </div>
               </th>
               <th className="px-3 py-3 font-bold text-center">傾向判定</th>
-              <th className="px-4 py-3 font-bold text-center">詳細展開</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {sortedTails.map((t) => {
               const isExpanded = expandedTail === t.tail;
+              const currentRank = isHall ? t.rankHall : t.rankPlayer;
               return (
                 <React.Fragment key={`tail-row-${t.tail}`}>
                   <tr className={`hover:bg-slate-50/80 transition-colors ${t.isStoreEvent ? 'bg-amber-50/30 font-medium' : ''}`}>
+                    <td className="px-3 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(t.tail)}
+                        className={`p-1.5 rounded transition-colors cursor-pointer ${
+                          isExpanded ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-200 text-slate-500'
+                        }`}
+                        title="該当営業日リストを表示"
+                        aria-label="該当営業日リストを表示"
+                      >
+                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                    </td>
+                    <td className="px-3 py-3 font-bold text-center">
+                      {t.count > 0 ? (
+                        <span className={`inline-flex items-center justify-center min-w-8 px-2 py-0.5 rounded-full text-xs font-black ${
+                          currentRank === 1
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300 shadow-xs'
+                            : currentRank === 2
+                            ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                            : currentRank === 3
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : 'text-slate-600'
+                        }`}>
+                          {currentRank}位
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="font-bold text-slate-900 flex items-center gap-1.5">
                         <span>{t.label}</span>
@@ -543,9 +1072,6 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                         )}
                       </div>
                       <div className="text-[10px] text-slate-400">{t.sampleDays} ({t.count}日)</div>
-                    </td>
-                    <td className="px-3 py-3 font-bold text-slate-600">
-                      {t.count > 0 ? `${isHall ? t.rankHall : t.rankPlayer}位` : '-'}
                     </td>
                     <td className={`px-3 py-3 text-right font-extrabold ${t.displayDiffCoins > 0 ? (isHall ? 'text-indigo-600' : 'text-blue-600') : 'text-rose-600'}`}>
                       {t.displayDiffCoins > 0 ? `+${t.displayDiffCoins}` : t.displayDiffCoins}枚
@@ -564,16 +1090,6 @@ export const TailNumberAnalysis: React.FC<TailNumberAnalysisProps> = ({
                     </td>
                     <td className="px-3 py-3 text-center">
                       {getStatusBadge(t)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => toggleExpand(t.tail)}
-                        className="p-1 rounded hover:bg-slate-200 text-slate-500 cursor-pointer"
-                        title="該当営業日リストを表示"
-                      >
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </button>
                     </td>
                   </tr>
 

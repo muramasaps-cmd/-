@@ -40,7 +40,7 @@ interface MonthlyTableProps {
   monthlyStats: MonthlyStat[];
   dailyRecords?: DailyRecord[];
   perspective: 'hall' | 'player';
-  unit: 'yen' | 'coins' | 'avgDiff';
+  unit: 'yen' | 'coins' | 'avgDiff' | 'payoutRate';
   profitModel?: any;
   specialDayRules?: any;
   oldEventDays?: string;

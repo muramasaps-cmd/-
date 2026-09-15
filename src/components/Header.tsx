@@ -12,17 +12,20 @@ import {
   Plus,
   Target,
   Pencil,
+  Percent,
 } from 'lucide-react';
 import { SpecialDayRuleModal } from './SpecialDayRuleModal';
 
 export type ProfitModelType = 'gCount';
 
+export type UnitMode = 'yen' | 'coins' | 'avgDiff' | 'payoutRate';
+
 interface HeaderProps {
   storeInfo: StoreInfo;
   perspective: 'hall' | 'player';
   setPerspective: (p: 'hall' | 'player') => void;
-  unit: 'yen' | 'coins' | 'avgDiff';
-  setUnit: (u: 'yen' | 'coins' | 'avgDiff') => void;
+  unit: UnitMode;
+  setUnit: (u: UnitMode) => void;
   profitModel?: ProfitModelType;
   setProfitModel?: (m: ProfitModelType) => void;
   selectedYear: string;
@@ -194,13 +197,26 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 id="btn-unit-avg"
                 onClick={() => setUnit('avgDiff')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                   unit === 'avgDiff'
                     ? 'bg-slate-700 text-white shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 台平均
+              </button>
+              <button
+                type="button"
+                id="btn-unit-payout"
+                onClick={() => setUnit('payoutRate')}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                  unit === 'payoutRate'
+                    ? 'bg-slate-700 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Percent className="w-3.5 h-3.5" />
+                出玉率(機械割)
               </button>
             </div>
           </div>
