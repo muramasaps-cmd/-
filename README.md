@@ -18,8 +18,8 @@ React 19 + TypeScript + Tailwind CSS + Recharts で構築されており、美�
    - 差枚数だけでなく、客側の現金投資比率と換金ギャップ手数料（貸出レートと交換レートの差）を加味した高精度な店舗粗利計算
 4. **多彩な分析機能**
    - 🎯 **旧特日・イベント日サイクル分析**（特日と通常日の利益・出玉比較）
-   - 📆 **曜日別傾向分析**（各曜日の平均粗利・勝率・差枚分布）
-   - 🔢 **〇のつく日別（末尾0〜9）傾向分析**
+   - 📆 **曜日・祝日別傾向分析**（各曜日の平均粗利・勝率・差枚分布）
+   - 🔢 **〇のつく日別（末尾0〜9 & ゾロ目）傾向分析**
    - 📋 **全営業日（カレンダー・詳細リスト）閲覧**
 5. **マルチ店舗管理 & ローカル保存**
    - 複数店舗のデータをブラウザのLocalStorageに安全に保持・ワンクリック切り替え
@@ -80,10 +80,10 @@ npm run build
 │   │   ├── Header.tsx          # 店舗情報・ヘッダー
 │   │   ├── KpiCards.tsx        # TOP左側 4大KPIカード
 │   │   ├── ProfitChart.tsx     # TOP右側 月別推移グラフ (Recharts)
+│   │   ├── TailNumberAnalysis.tsx # 末尾日別分析
+│   │   ├── DayOfWeekAnalysis.tsx  # 曜日別分析
 │   │   ├── MonthlyTable.tsx    # 月別詳細集計表
 │   │   ├── SpecialDayPatterns.tsx # 特日サイクル分析
-│   │   ├── DayOfWeekAnalysis.tsx  # 曜日別分析
-│   │   ├── TailNumberAnalysis.tsx # 末尾日別分析
 │   │   ├── DailyModal.tsx      # 日別詳細モーダル
 │   │   └── StoreManagerModal.tsx  # HTMLインポート・店舗管理
 │   ├── utils/
